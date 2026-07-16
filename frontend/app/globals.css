@@ -1,26 +1,61 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@theme {
+  --color-paper: #f4f3ea;
+  --color-ink: #14231c;
+  --color-green: #0f5a40;
+  --color-green-deep: #0a3b2a;
+  --color-gold: #efa83b;
+  --color-muted: #8c9a90;
+  --color-line: #dedccf;
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+  --animate-tick-pop: tick-pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) backwards;
+  --animate-chip-float: chip-float 3.5s ease-in-out infinite;
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+  @keyframes tick-pop {
+    0% {
+      opacity: 0;
+      transform: scale(0.3);
+    }
+    70% {
+      opacity: 1;
+      transform: scale(1.12);
+    }
+    100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  @keyframes chip-float {
+    0%,
+    100% {
+      transform: rotate(3deg) translateY(0);
+    }
+    50% {
+      transform: rotate(3deg) translateY(-6px);
+    }
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@theme inline {
+  --font-display: var(--font-bricolage);
+  --font-sans: var(--font-instrument);
+  --font-mono: var(--font-space-mono);
+}
+
+:focus-visible {
+  outline: 3px solid var(--color-gold);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
 }
