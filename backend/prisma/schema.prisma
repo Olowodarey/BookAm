@@ -1,0 +1,134 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  MEMBER
+  COORDINATOR
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+enum ApplicationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum BillingInterval {
+  MONTHLY
+  QUARTERLY
+  YEARLY
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  EXPIRED
+  CANCELLED
+}
+
+enum CircleFrequency {
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
+enum CircleStatus {
+  ACTIVE
+  COMPLETED
+  PAUSED
+}
+
+model User {
+  id           String     @id @default(cuid())
+  phone        String     @unique
+  name         String
+  // Password auth is a stopgap for the admin dashboard; phone-OTP login
+  // (roadmap) will replace the credential check without touching roles.
+  passwordHash String?
+  role         Role       @default(MEMBER)
+  status       UserStatus @default(ACTIVE)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  applications         CollectorApplication[] @relation("Applicant")
+  reviewedApplications CollectorApplication[] @relation("Reviewer")
+  subscriptions        Subscription[]
+  coordinatedCircles   Circle[]               @relation("Coordinator")
+}
+
+model CollectorApplication {
+  id     String            @id @default(cuid())
+  status ApplicationStatus @default(PENDING)
+  // Free-text reason the applicant submitted with their request.
+  note   String?
+
+  applicant   User   @relation("Applicant", fields: [applicantId], references: [id])
+  applicantId String
+
+  reviewNote   String?
+  reviewedBy   User?     @relation("Reviewer", fields: [reviewedById], references: [id])
+  reviewedById String?
+  reviewedAt   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([applicantId])
+}
+
+model SubscriptionPlan {
+  id         String          @id @default(cuid())
+  name       String          @unique
+  // BookAm's own SaaS fee, charged off-platform via Paystack.
+  // NOT member ajo money — BookAm never holds contributions.
+  priceNaira Int
+  interval   BillingInterval @default(MONTHLY)
+  maxCircles Int?
+  features   String[]
+  active     Boolean         @default(true)
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+
+  subscriptions Subscription[]
+}
+
+model Subscription {
+  id          String             @id @default(cuid())
+  user        User               @relation(fields: [userId], references: [id])
+  userId      String
+  plan        SubscriptionPlan   @relation(fields: [planId], references: [id])
+  planId      String
+  status      SubscriptionStatus @default(ACTIVE)
+  periodStart DateTime
+  periodEnd   DateTime
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  @@index([userId])
+  @@index([status])
+}
+
+model Circle {
+  id                      String          @id @default(cuid())
+  name                    String
+  contributionAmountNaira Int
+  frequency               CircleFrequency
+  status                  CircleStatus    @default(ACTIVE)
+  coordinator             User            @relation("Coordinator", fields: [coordinatorId], references: [id])
+  coordinatorId           String
+  createdAt               DateTime        @default(now())
+  updatedAt               DateTime        @updatedAt
+
+  @@index([coordinatorId])
+}
