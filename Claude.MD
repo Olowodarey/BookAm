@@ -57,19 +57,38 @@ BOOKAM/
 │   ├── src/
 │   │   ├── prisma/     # PrismaService + global module
 │   │   ├── auth/       # JWT login, /auth/me, JwtAuthGuard, Roles/RolesGuard
-│   │   └── admin/      # /admin/* endpoints (overview, applications, plans,
+│   │   ├── admin/      # /admin/* endpoints (overview, applications, plans,
 │   │   │               #   subscriptions, users) — all guarded by ADMIN role
+│   │   ├── circles/    # coordinator workspace: /circles/* (COORDINATOR role,
+│   │   │               #   ownership-scoped) + public /invite/:token join flow;
+│   │   │               #   receipt uploads (ReceiptStorageService) + AppealsService
+│   │   └── member/     # contributor view: /member/* (any signed-in user,
+│   │                   #   scoped by their own ACTIVE memberships) — read-only
+│   │                   #   except own-receipt upload and appeals/voting
 │   ├── prisma/         # schema.prisma, migrations/, seed.ts
+│   ├── uploads/        # local-dev receipt files (gitignored; TODO S3/Cloudinary)
 │   └── .env.example
 ├── frontend/           # Next.js (App Router) + TS + Tailwind — web app + landing
 │   ├── app/
 │   │   ├── (marketing)/        # landing page
-│   │   └── admin/              # platform-owner console
-│   │       ├── login/          # admin sign-in
-│   │       └── (dashboard)/    # guarded shell: overview, applications,
-│   │                           #   subscriptions, users, settings
-│   ├── components/     # UI components (landing/*, admin/*)
-│   ├── lib/admin/      # typed API client + mirrored API types
+│   │   ├── admin/              # platform-owner console
+│   │   │   ├── login/          # admin sign-in
+│   │   │   └── (dashboard)/    # guarded shell: overview, applications,
+│   │   │                       #   subscriptions, users, settings
+│   │   ├── dashboard/          # coordinator (alajo) workspace
+│   │   │   ├── login/          # coordinator sign-in
+│   │   │   └── (app)/          # guarded shell: circle list + per-circle
+│   │   │       └── circles/[id]/   # overview (+ appeal decisions), members,
+│   │   │                           #   contributions, payout
+│   │   ├── me/                 # member (contributor) dashboard — read-mostly
+│   │   │   ├── login/          # member sign-in
+│   │   │   └── (app)/          # shell: my circles + per-circle
+│   │   │       └── circles/[id]/   # overview + my receipt, members, appeals
+│   │   └── join/[token]/       # public invite page (member joins a circle)
+│   ├── components/     # UI components (landing/*, admin/*, dashboard/*, member/*)
+│   ├── lib/admin/      # typed API client + mirrored API types (admin console)
+│   ├── lib/dashboard/  # typed API client + mirrored API types (coordinator)
+│   ├── lib/member/     # typed API client + mirrored API types (member view)
 │   └── .env.example
 ├── .gitignore
 └── CLAUDE.md           # this file (repo root)
@@ -90,16 +109,15 @@ Implemented in `backend/prisma/schema.prisma` (✓ = in the schema today):
 - **CollectorApplication** ✓ — a user's request to become a coordinator: applicant, status (PENDING | APPROVED | REJECTED), applicant's note, reviewNote, reviewedBy, reviewedAt. Approving promotes the applicant to COORDINATOR.
 - **SubscriptionPlan** ✓ — a BookAm SaaS pricing tier: name, priceNaira, interval (MONTHLY | QUARTERLY | YEARLY), maxCircles (null = unlimited), features[], active. *This is BookAm's own revenue, not ajo money.*
 - **Subscription** ✓ — which user is on which plan: status (ACTIVE | EXPIRED | CANCELLED), periodStart/periodEnd. Records only; Paystack charge collection is a marked TODO.
-- **Circle** ✓ (minimal) — one rotating savings group. Has: name, contribution amount, frequency (daily/weekly/monthly), status, and the coordinator (a User). Memberships/cycles still to come.
+- **Circle** ✓ — one rotating savings group: name, contribution amount, frequency (daily/weekly/monthly), status (ACTIVE | COMPLETED | PAUSED), coordinator (User), `memberTarget` (planned rotation size), and an optional `inviteToken` for the shareable join link.
+- **Membership** ✓ — a member of a Circle by **name + phone** (optional link to a User account via `userId`), with their 1-based **position** in the payout rotation and status (ACTIVE | REMOVED — soft-removed so records survive). Position uniqueness among active members is enforced in the service layer, not the DB (removed members keep their last value).
+- **Cycle** ✓ — one contribution period/round of a Circle: `index` (unique per circle), status (OPEN | COMPLETED), and the current **collector** (a Membership). One cycle is open at a time; completing a payout opens the next.
+- **Contribution** ✓ — one member's payment record for a cycle: amount, status (AWAITING | PENDING_REVIEW | PAID | REJECTED), `receiptFileUrl` (uploaded proof), rejectionReason, reviewedBy/reviewedAt. Unique per (membership, cycle). **A record only — no funds move.**
+- **Payout** ✓ — the record of the pot being handed to the cycle's collector: status (PENDING | COMPLETED), `receiptFileUrl` (the coordinator's transfer proof), amount (computed sum of PAID contributions), completedAt. Unique per cycle. **BookAm does not disburse.**
+- **Appeal** ✓ — a member's request to be considered to collect next: circle, appellant (Membership), reason, status (OPEN | APPROVED | REJECTED | WITHDRAWN), decidedBy (coordinator User), decidedAt, outcomeNote. One OPEN appeal per member per circle (service-enforced). Reason, tally and outcome are visible to the whole circle.
+- **AppealVote** ✓ — one member's advisory vote on an appeal: value (SUPPORT | OPPOSE), unique per (appeal, voter); changeable while the appeal is open. The tally is advisory — the coordinator decides, and approval reorders the rotation so the appellant collects right after the current turn.
 
-Still to build:
-
-- **Membership** — links a User to a Circle, with their **position** in the payout rotation.
-- **Cycle** — one full rotation of a Circle (or one contribution period, depending on model). Tracks which period is active.
-- **Contribution** — a single payment record: which Membership, which Cycle/period, amount, marked-paid timestamp, and who recorded it. **This is a record only — no funds move.**
-- **Payout** — the record of whose turn it is to collect in a given cycle (status: pending/collected). Again, a record — BookAm does not disburse.
-
-Key rules to encode: a member's rotation position is unique within a Circle; contributions are immutable once recorded (correct via a new adjusting record, don't silently overwrite); every money-related field is a *label on a record*, never a balance BookAm controls.
+Key rules encoded: rotation position is managed per-circle in the service layer; completing a payout closes the cycle and advances the rotation (next active member by position who hasn't collected; when everyone has, the circle is COMPLETED); every money-related field is a *label on a record*, never a balance BookAm controls. Receipt files are validated (JPG/PNG/WebP/PDF, ≤5 MB) and stored on local disk in dev (`backend/uploads/`, served at `/uploads/*`) behind a storage adapter with a `// TODO: S3/Cloudinary` swap point.
 
 ---
 
@@ -130,6 +148,15 @@ Key rules to encode: a member's rotation position is unique within a Circle; con
 - **Frontend** (`frontend/`): copy `.env.example` → `.env.local` (defaults to :4000), then
   `pnpm install`, `pnpm dev` → app on :3000. Admin console at `/admin` (seeded admin:
   phone `+2348000000001`, password `admin1234` — change via `SEED_ADMIN_*` env vars).
+  Coordinator dashboard at `/dashboard` (seeded coordinator: phone `+2348011111111`,
+  password `alajo1234` — change via `SEED_COORDINATOR_PASSWORD`; comes with a demo
+  circle, members and mixed contribution statuses).
+  Member dashboard at `/me` (seeded members, e.g. phone `+2348066666666`, password
+  `member1234` — change via `SEED_MEMBER_PASSWORD`; the demo circle includes an open
+  appeal with votes).
+  Dedicated test accounts (own circle "Ketu Market Daily", distinct passwords):
+  collector `+2348090000001` / `collector5678` (`SEED_TEST_COLLECTOR_PASSWORD`) and
+  contributor `+2348090000002` / `contributor5678` (`SEED_TEST_MEMBER_PASSWORD`).
 
 ---
 
@@ -142,12 +169,16 @@ Key rules to encode: a member's rotation position is unique within a Circle; con
 - [ ] Phone OTP auth (JWT + role guards exist; swap the password check for OTP)
 - [x] Platform admin dashboard (overview metrics, collector request review, subscription plans/records, user suspend/reactivate, settings placeholder)
 - [ ] Paystack integration for BookAm subscription fees (records exist; `// TODO: Paystack` in subscriptions.service.ts)
-- [ ] Create / manage circles
-- [ ] Add members + set rotation order
-- [ ] Record contributions (mark paid / owing)
-- [ ] Coordinator dashboard (paid vs owing, who collects next)
-- [ ] Invite members via shareable link
-- [ ] WhatsApp / SMS reminders
+- [x] Create / manage circles
+- [x] Add members + set rotation order (drag-to-reorder, soft remove)
+- [x] Record contributions (receipt upload → verify/reject → paid / owing)
+- [x] Coordinator dashboard (ajo collection card, paid vs owing, who collects next, payout receipts + rotation advance)
+- [x] Invite members via shareable link (public `/join/[token]` page)
+- [x] Member (contributor) dashboard at `/me` — my circles with "you collect in ~N turns", read-only circle view (ajo card, who collects next, member statuses, receipt viewing), submit/re-submit my own contribution receipt
+- [x] Appeals + community voting — "consider me to collect next" with reason, one changeable advisory vote per member, live tally, coordinator approve/reject (approval reorders the rotation); full trail visible to the circle
+- [ ] WhatsApp / SMS reminders (message + recipient list generated at `GET /circles/:id/reminders`; actual send is a `// TODO` in contributions.service.ts)
+- [ ] Receipt storage in the cloud + signed URLs (`// TODO: S3/Cloudinary` in receipt-storage.service.ts; local disk in dev)
+- [ ] Member-facing receipt submission (today the coordinator attaches receipts members send on WhatsApp; needs member auth/OTP)
 
 ---
 

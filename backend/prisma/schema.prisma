@@ -48,6 +48,40 @@ enum CircleStatus {
   PAUSED
 }
 
+enum MembershipStatus {
+  ACTIVE
+  REMOVED
+}
+
+enum CycleStatus {
+  OPEN
+  COMPLETED
+}
+
+enum ContributionStatus {
+  AWAITING
+  PENDING_REVIEW
+  PAID
+  REJECTED
+}
+
+enum PayoutStatus {
+  PENDING
+  COMPLETED
+}
+
+enum AppealStatus {
+  OPEN
+  APPROVED
+  REJECTED
+  WITHDRAWN
+}
+
+enum VoteValue {
+  SUPPORT
+  OPPOSE
+}
+
 model User {
   id           String     @id @default(cuid())
   phone        String     @unique
@@ -60,10 +94,13 @@ model User {
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 
-  applications         CollectorApplication[] @relation("Applicant")
-  reviewedApplications CollectorApplication[] @relation("Reviewer")
-  subscriptions        Subscription[]
-  coordinatedCircles   Circle[]               @relation("Coordinator")
+  applications          CollectorApplication[] @relation("Applicant")
+  reviewedApplications  CollectorApplication[] @relation("Reviewer")
+  subscriptions         Subscription[]
+  coordinatedCircles    Circle[]               @relation("Coordinator")
+  memberships           Membership[]           @relation("MemberUser")
+  reviewedContributions Contribution[]         @relation("ContributionReviewer")
+  decidedAppeals        Appeal[]               @relation("AppealDecider")
 }
 
 model CollectorApplication {
@@ -125,10 +162,146 @@ model Circle {
   contributionAmountNaira Int
   frequency               CircleFrequency
   status                  CircleStatus    @default(ACTIVE)
+  // Planned rotation size (number of member slots the coordinator set up).
+  memberTarget            Int             @default(0)
+  // Random token for the shareable "join this circle" link. Null = link off.
+  inviteToken             String?         @unique
   coordinator             User            @relation("Coordinator", fields: [coordinatorId], references: [id])
   coordinatorId           String
   createdAt               DateTime        @default(now())
   updatedAt               DateTime        @updatedAt
 
+  memberships Membership[]
+  cycles      Cycle[]
+  appeals     Appeal[]
+
   @@index([coordinatorId])
+}
+
+model Membership {
+  id        String           @id @default(cuid())
+  circle    Circle           @relation(fields: [circleId], references: [id])
+  circleId  String
+  // Members are usually added by name + phone before they have an account;
+  // userId links them to a real User once they sign up.
+  user      User?            @relation("MemberUser", fields: [userId], references: [id])
+  userId    String?
+  name      String
+  phone     String
+  // 1-based slot in the payout rotation. Uniqueness among ACTIVE memberships
+  // is enforced in the service layer (removed members keep their last value).
+  position  Int
+  status    MembershipStatus @default(ACTIVE)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  contributions    Contribution[]
+  payouts          Payout[]
+  collectingCycles Cycle[]        @relation("CycleCollector")
+  appeals          Appeal[]
+  appealVotes      AppealVote[]
+
+  @@index([circleId])
+  @@index([userId])
+}
+
+model Cycle {
+  id          String      @id @default(cuid())
+  circle      Circle      @relation(fields: [circleId], references: [id])
+  circleId    String
+  // 1-based period number within the circle (cycle 3 = third payout turn).
+  index       Int
+  status      CycleStatus @default(OPEN)
+  // Whose turn it is to collect the pot this cycle.
+  collector   Membership? @relation("CycleCollector", fields: [collectorId], references: [id])
+  collectorId String?
+  startedAt   DateTime    @default(now())
+  completedAt DateTime?
+
+  contributions Contribution[]
+  payout        Payout?
+
+  @@unique([circleId, index])
+  @@index([circleId, status])
+}
+
+model Contribution {
+  id              String             @id @default(cuid())
+  membership      Membership         @relation(fields: [membershipId], references: [id])
+  membershipId    String
+  cycle           Cycle              @relation(fields: [cycleId], references: [id])
+  cycleId         String
+  // Record of what the member paid outside BookAm — never money BookAm holds.
+  amountNaira     Int
+  status          ContributionStatus @default(AWAITING)
+  // Reference to the uploaded proof-of-payment file (image/PDF), e.g. "/uploads/x.png".
+  receiptFileUrl  String?
+  rejectionReason String?
+  reviewedBy      User?              @relation("ContributionReviewer", fields: [reviewedById], references: [id])
+  reviewedById    String?
+  reviewedAt      DateTime?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  @@unique([membershipId, cycleId])
+  @@index([cycleId, status])
+}
+
+model Payout {
+  id             String       @id @default(cuid())
+  cycle          Cycle        @relation(fields: [cycleId], references: [id])
+  cycleId        String       @unique
+  collector      Membership   @relation(fields: [collectorId], references: [id])
+  collectorId    String
+  // Computed sum of PAID contributions at completion time — a label on a
+  // record, not a balance BookAm controls or disburses.
+  amountNaira    Int
+  status         PayoutStatus @default(PENDING)
+  // Proof the coordinator sent the pot to the collector (outside BookAm).
+  receiptFileUrl String?
+  completedAt    DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([collectorId])
+}
+
+// A member's request to be considered to collect next. Voting is advisory;
+// the coordinator makes the final call and the whole trail stays visible to
+// every member of the circle.
+model Appeal {
+  id          String       @id @default(cuid())
+  circle      Circle       @relation(fields: [circleId], references: [id])
+  circleId    String
+  appellant   Membership   @relation(fields: [appellantId], references: [id])
+  appellantId String
+  // Why they want to collect next (emergency, school fees, medical, …).
+  reason      String
+  status      AppealStatus @default(OPEN)
+  // Coordinator decision trail — recorded and shown to all members.
+  decidedBy   User?        @relation("AppealDecider", fields: [decidedById], references: [id])
+  decidedById String?
+  decidedAt   DateTime?
+  outcomeNote String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  votes AppealVote[]
+
+  @@index([circleId, status])
+  @@index([appellantId])
+}
+
+model AppealVote {
+  id        String     @id @default(cuid())
+  appeal    Appeal     @relation(fields: [appealId], references: [id])
+  appealId  String
+  voter     Membership @relation(fields: [voterId], references: [id])
+  voterId   String
+  value     VoteValue
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  // One vote per member per appeal (changeable until the appeal is decided).
+  @@unique([appealId, voterId])
 }

@@ -1,5 +1,7 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, type Membership } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
+import { mkdir, writeFile } from 'fs/promises';
+import { join } from 'path';
 
 const prisma = new PrismaClient();
 
@@ -56,6 +58,14 @@ async function main() {
     },
   });
 
+  // Coordinators and members get passwords so both dashboards can be tried
+  // locally (stopgap until phone-OTP login lands).
+  const coordinatorPassword =
+    process.env.SEED_COORDINATOR_PASSWORD ?? 'alajo1234';
+  const coordinatorHash = await bcrypt.hash(coordinatorPassword, 10);
+  const memberPassword = process.env.SEED_MEMBER_PASSWORD ?? 'member1234';
+  const memberHash = await bcrypt.hash(memberPassword, 10);
+
   const demoUsers = [
     { phone: '+2348011111111', name: 'Iya Basira', role: 'COORDINATOR' },
     { phone: '+2348022222222', name: 'Chinedu Okafor', role: 'COORDINATOR' },
@@ -67,12 +77,20 @@ async function main() {
 
   const users: Record<string, { id: string }> = {};
   for (const u of demoUsers) {
+    const passwordHash =
+      u.role === 'COORDINATOR' ? coordinatorHash : memberHash;
     users[u.phone] = await prisma.user.upsert({
       where: { phone: u.phone },
-      update: {},
-      create: { phone: u.phone, name: u.name, role: u.role },
+      update: { passwordHash },
+      create: { phone: u.phone, name: u.name, role: u.role, passwordHash },
     });
   }
+  console.log(
+    `Coordinator ready: +2348011111111 (password: ${coordinatorPassword})`,
+  );
+  console.log(
+    `Member ready: +2348033333333 (password: ${memberPassword})`,
+  );
 
   if ((await prisma.collectorApplication.count()) === 0) {
     await prisma.collectorApplication.createMany({
@@ -153,6 +171,226 @@ async function main() {
         },
       ],
     });
+  }
+
+  // Demo tracking data for the coordinator dashboard: members, an open
+  // cycle, and contributions in every status. Records only — no funds move.
+  const balogun = await prisma.circle.findFirst({
+    where: { name: 'Balogun Traders Weekly' },
+  });
+  if (
+    balogun &&
+    (await prisma.membership.count({ where: { circleId: balogun.id } })) === 0
+  ) {
+    await prisma.circle.update({
+      where: { id: balogun.id },
+      data: { memberTarget: 6 },
+    });
+
+    const memberSeed: ReadonlyArray<readonly [string, string]> = [
+      ['Amina Yusuf', '+2348033333333'],
+      ['Tunde Adebayo', '+2348044444444'],
+      ['Ngozi Eze', '+2348055555555'],
+      ['Musa Ibrahim', '+2348066666666'],
+      ['Bola Martins', '+2348077777777'],
+      ['Kemi Alade', '+2348088888888'],
+    ];
+    const memberships: Membership[] = [];
+    for (const [i, [name, phone]] of memberSeed.entries()) {
+      memberships.push(
+        await prisma.membership.create({
+          data: {
+            circleId: balogun.id,
+            name,
+            phone,
+            position: i + 1,
+            userId: users[phone]?.id ?? null,
+          },
+        }),
+      );
+    }
+
+    const cycle = await prisma.cycle.create({
+      data: {
+        circleId: balogun.id,
+        index: 1,
+        collectorId: memberships[0].id,
+      },
+    });
+
+    // A tiny green PNG stands in for uploaded receipts in local dev.
+    const uploadsDir = join(process.cwd(), 'uploads');
+    await mkdir(uploadsDir, { recursive: true });
+    const receiptUrl = '/uploads/seed-receipt.png';
+    await writeFile(
+      join(uploadsDir, 'seed-receipt.png'),
+      Buffer.from(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+        'base64',
+      ),
+    );
+
+    const coordinatorId = users['+2348011111111'].id;
+    const statusRows = [
+      { m: memberships[0], status: 'PAID', receipt: true, reviewed: true },
+      { m: memberships[1], status: 'PAID', receipt: false, reviewed: true },
+      { m: memberships[2], status: 'PENDING_REVIEW', receipt: true },
+      {
+        m: memberships[3],
+        status: 'REJECTED',
+        receipt: true,
+        reviewed: true,
+        reason: 'Transfer receipt shows ₦3,000, not the full ₦5,000.',
+      },
+      { m: memberships[4], status: 'AWAITING' },
+      { m: memberships[5], status: 'AWAITING' },
+    ] as const;
+    for (const row of statusRows) {
+      await prisma.contribution.create({
+        data: {
+          membershipId: row.m.id,
+          cycleId: cycle.id,
+          amountNaira: balogun.contributionAmountNaira,
+          status: row.status,
+          receiptFileUrl: 'receipt' in row && row.receipt ? receiptUrl : null,
+          rejectionReason: 'reason' in row ? row.reason : null,
+          reviewedById:
+            'reviewed' in row && row.reviewed ? coordinatorId : null,
+          reviewedAt: 'reviewed' in row && row.reviewed ? new Date() : null,
+        },
+      });
+    }
+  }
+
+  // Dedicated test accounts with their own phone numbers and passwords
+  // (separate from the shared demo users above) so each dashboard can be
+  // tried with a distinct login: a collector who owns a fresh circle, and a
+  // contributor who belongs to it.
+  const testCollectorPhone =
+    process.env.SEED_TEST_COLLECTOR_PHONE ?? '+2348090000001';
+  const testCollectorPassword =
+    process.env.SEED_TEST_COLLECTOR_PASSWORD ?? 'collector5678';
+  const testMemberPhone =
+    process.env.SEED_TEST_MEMBER_PHONE ?? '+2348090000002';
+  const testMemberPassword =
+    process.env.SEED_TEST_MEMBER_PASSWORD ?? 'contributor5678';
+
+  const testCollector = await prisma.user.upsert({
+    where: { phone: testCollectorPhone },
+    update: {
+      role: 'COORDINATOR',
+      passwordHash: await bcrypt.hash(testCollectorPassword, 10),
+    },
+    create: {
+      phone: testCollectorPhone,
+      name: 'Baba Kazeem',
+      role: 'COORDINATOR',
+      passwordHash: await bcrypt.hash(testCollectorPassword, 10),
+    },
+  });
+  const testMember = await prisma.user.upsert({
+    where: { phone: testMemberPhone },
+    update: { passwordHash: await bcrypt.hash(testMemberPassword, 10) },
+    create: {
+      phone: testMemberPhone,
+      name: 'Chika Obi',
+      role: 'MEMBER',
+      passwordHash: await bcrypt.hash(testMemberPassword, 10),
+    },
+  });
+  console.log(
+    `Test collector ready: ${testCollector.phone} (password: ${testCollectorPassword})`,
+  );
+  console.log(
+    `Test contributor ready: ${testMember.phone} (password: ${testMemberPassword})`,
+  );
+
+  // Give the test collector a fresh circle with the test contributor in it,
+  // so both accounts land on a populated dashboard straight away.
+  let ketu = await prisma.circle.findFirst({
+    where: { name: 'Ketu Market Daily', coordinatorId: testCollector.id },
+  });
+  if (!ketu) {
+    ketu = await prisma.circle.create({
+      data: {
+        name: 'Ketu Market Daily',
+        contributionAmountNaira: 1000,
+        frequency: 'DAILY',
+        memberTarget: 4,
+        coordinatorId: testCollector.id,
+      },
+    });
+    const ketuMemberSeed: ReadonlyArray<
+      readonly [string, string, string | null]
+    > = [
+      ['Chika Obi', testMemberPhone, testMember.id],
+      ['Sade Balogun', '+2348090000003', null],
+      ['Emeka Nwosu', '+2348090000004', null],
+      ['Fatima Bello', '+2348090000005', null],
+    ];
+    const ketuMemberships: Membership[] = [];
+    for (const [i, [name, phone, userId]] of ketuMemberSeed.entries()) {
+      ketuMemberships.push(
+        await prisma.membership.create({
+          data: { circleId: ketu.id, name, phone, position: i + 1, userId },
+        }),
+      );
+    }
+    const ketuCycle = await prisma.cycle.create({
+      data: {
+        circleId: ketu.id,
+        index: 1,
+        collectorId: ketuMemberships[0].id,
+      },
+    });
+    // One member already paid so the collection card shows both states;
+    // the rest (including the test contributor) still owe — leaving the
+    // contributor's receipt-upload flow free to test.
+    for (const [i, m] of ketuMemberships.entries()) {
+      await prisma.contribution.create({
+        data: {
+          membershipId: m.id,
+          cycleId: ketuCycle.id,
+          amountNaira: ketu.contributionAmountNaira,
+          status: i === 1 ? 'PAID' : 'AWAITING',
+          reviewedById: i === 1 ? testCollector.id : null,
+          reviewedAt: i === 1 ? new Date() : null,
+        },
+      });
+    }
+  }
+
+  // Demo appeal + advisory votes so the member dashboard shows the full
+  // "consider me next" flow (independent of the membership-seeding block so
+  // it also fills in on already-seeded databases).
+  if (balogun && (await prisma.appeal.count()) === 0) {
+    const byPhone = async (phone: string) =>
+      prisma.membership.findFirst({
+        where: { circleId: balogun.id, phone, status: 'ACTIVE' },
+      });
+    const [ngozi, tunde, musa, bola] = await Promise.all([
+      byPhone('+2348055555555'),
+      byPhone('+2348044444444'),
+      byPhone('+2348066666666'),
+      byPhone('+2348077777777'),
+    ]);
+    if (ngozi && tunde && musa && bola) {
+      const appeal = await prisma.appeal.create({
+        data: {
+          circleId: balogun.id,
+          appellantId: ngozi.id,
+          reason:
+            "School fees for my daughter are due before month end — I'm appealing to collect early this once.",
+        },
+      });
+      await prisma.appealVote.createMany({
+        data: [
+          { appealId: appeal.id, voterId: tunde.id, value: 'SUPPORT' },
+          { appealId: appeal.id, voterId: musa.id, value: 'SUPPORT' },
+          { appealId: appeal.id, voterId: bola.id, value: 'OPPOSE' },
+        ],
+      });
+    }
   }
 
   console.log('Seed complete.');
