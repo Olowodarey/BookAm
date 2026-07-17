@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   authApi,
+  consumePostAuthRedirect,
   homeFor,
   storeSession,
   type LoginResponse,
@@ -35,7 +36,9 @@ export default function RegisterPage() {
   const finish = useCallback(
     (session: LoginResponse) => {
       storeSession(session);
-      router.replace(homeFor(session.user.role));
+      router.replace(
+        consumePostAuthRedirect() ?? homeFor(session.user.role),
+      );
     },
     [router],
   );

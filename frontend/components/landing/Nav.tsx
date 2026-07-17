@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 const LOGO_CELLS: ReadonlyArray<"green" | "gold"> = [
   "green",
   "green",
@@ -26,10 +28,13 @@ export function LogoMark({ className = "" }: { className?: string }) {
   );
 }
 
+// "/#section" (not "#section") so the links also work from other pages
+// that reuse this nav, e.g. /become-a-collector.
 const NAV_LINKS = [
-  { label: "Why BookAm", href: "#why" },
-  { label: "Features", href: "#features" },
-  { label: "How it works", href: "#how" },
+  { label: "Why BookAm", href: "/#why" },
+  { label: "Features", href: "/#features" },
+  { label: "How it works", href: "/#how" },
+  { label: "For collectors", href: "/become-a-collector" },
 ] as const;
 
 export default function Nav() {
@@ -48,29 +53,29 @@ export default function Nav() {
 
         <div className="hidden items-center gap-7 md:flex">
           {NAV_LINKS.map((link) => (
-            <a
+            <Link
               key={link.href}
               href={link.href}
               className="text-sm font-medium text-ink/70 transition-colors hover:text-ink"
             >
               {link.label}
-            </a>
+            </Link>
           ))}
         </div>
 
         <div className="flex items-center gap-2">
-          <a
+          <Link
             href="/login"
             className="rounded-xl border border-line px-4 py-2 text-sm font-semibold text-ink/80 transition-colors hover:border-green hover:text-green"
           >
             Sign in
-          </a>
-          <a
-            href="#early-access"
+          </Link>
+          <Link
+            href="/#early-access"
             className="rounded-xl bg-green px-4 py-2 text-sm font-semibold text-paper transition-colors hover:bg-green-deep"
           >
             Get early access
-          </a>
+          </Link>
         </div>
       </nav>
     </header>

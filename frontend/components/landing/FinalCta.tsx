@@ -1,3 +1,4 @@
+import Link from "next/link";
 import WaitlistForm from "./WaitlistForm";
 
 export default function FinalCta() {
@@ -14,6 +15,16 @@ export default function FinalCta() {
         <div className="mt-8 flex w-full justify-center">
           <WaitlistForm />
         </div>
+        <p className="mt-6 text-sm text-ink/70">
+          Already run an ajo?{" "}
+          <Link
+            href="/become-a-collector"
+            className="font-semibold text-green underline underline-offset-2"
+          >
+            Apply to be a collector
+          </Link>{" "}
+          and bring your circle today.
+        </p>
       </div>
     </section>
   );

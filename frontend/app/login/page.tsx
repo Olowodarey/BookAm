@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import {
   authApi,
   AuthApiError,
+  consumePostAuthRedirect,
   homeFor,
   storeSession,
   type LoginResponse,
@@ -33,7 +34,9 @@ export default function LoginPage() {
   const finish = useCallback(
     (session: LoginResponse) => {
       storeSession(session);
-      router.replace(homeFor(session.user.role));
+      router.replace(
+        consumePostAuthRedirect() ?? homeFor(session.user.role),
+      );
     },
     [router],
   );

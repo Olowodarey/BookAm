@@ -71,6 +71,8 @@ BOOKAM/
 ├── frontend/           # Next.js (App Router) + TS + Tailwind — web app + landing
 │   ├── app/
 │   │   ├── (marketing)/        # landing page
+│   │   ├── become-a-collector/ # public pitch page for alajos; adapts to the
+│   │   │                       #   visitor (sign up → come back → apply inline)
 │   │   ├── login/, register/   # unified auth (phone+password, OTP step,
 │   │   │                       #   optional Google) — routes users by role
 │   │   ├── admin/              # platform-owner console
@@ -171,6 +173,7 @@ Key rules encoded: rotation position is managed per-circle in the service layer;
 - [x] Database schema + migrations (users/roles, collector applications, plans, subscriptions, minimal circles — memberships/cycles/contributions still pending)
 - [x] Registration + phone OTP verification (everyone joins as contributor; OTP delivery is a `// TODO: WhatsApp/Termii` — dev shows the code; verified phones auto-claim memberships)
 - [x] Unified `/login` + `/register` with role-based routing; member "apply to be a collector" flow feeding the existing admin review screen
+- [x] Public `/become-a-collector` page (linked from the landing nav + final CTA) — pitch + three steps + auth-aware apply section; signs visitors up and returns them to apply
 - [ ] Google sign-in — built end to end but disabled until `GOOGLE_CLIENT_ID` / `NEXT_PUBLIC_GOOGLE_CLIENT_ID` are set (create an OAuth client in Google Cloud Console)
 - [x] Platform admin dashboard (overview metrics, collector request review, subscription plans/records, user suspend/reactivate, settings placeholder)
 - [ ] Paystack integration for BookAm subscription fees (records exist; `// TODO: Paystack` in subscriptions.service.ts)

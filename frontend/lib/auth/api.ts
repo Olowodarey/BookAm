@@ -127,3 +127,21 @@ export function homeFor(role: Role): string {
       return "/me";
   }
 }
+
+// Lets a page (e.g. /become-a-collector) send visitors through /register or
+// /login and get them back afterwards, instead of the role's default home.
+const POST_AUTH_REDIRECT_KEY = "bookam.postAuthRedirect";
+
+export function setPostAuthRedirect(path: string): void {
+  if (typeof window === "undefined") return;
+  window.sessionStorage.setItem(POST_AUTH_REDIRECT_KEY, path);
+}
+
+/** Reads and clears the stored redirect (one use only). */
+export function consumePostAuthRedirect(): string | null {
+  if (typeof window === "undefined") return null;
+  const path = window.sessionStorage.getItem(POST_AUTH_REDIRECT_KEY);
+  window.sessionStorage.removeItem(POST_AUTH_REDIRECT_KEY);
+  // Only same-app paths — never an absolute URL someone planted.
+  return path && path.startsWith("/") && !path.startsWith("//") ? path : null;
+}
