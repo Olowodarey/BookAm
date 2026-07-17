@@ -38,14 +38,12 @@ BookAm is **tracking-only**. Members pay each other **directly**, exactly as the
 
 ## Tech stack
 
-> ⚠️ Backend choices below are **assumed** — developer to confirm/correct.
-
-- **Frontend:** `frontend/` — Next.js (App Router) + TypeScript + Tailwind CSS (web app + marketing landing).
-- **Backend:** `backend/` — standalone API server, separate from the frontend, TypeScript. *(Framework to confirm — e.g. Express / Fastify / NestJS.)*
-- **Database:** PostgreSQL *(assumed, via Prisma ORM)*.
-- **Auth:** phone-number OTP (no passwords).
+- **Frontend:** `frontend/` — Next.js 16 (App Router) + TypeScript + Tailwind CSS v4 (web app + marketing landing + admin console).
+- **Backend:** `backend/` — NestJS 11 (TypeScript, CommonJS), standalone API server on port **4000**.
+- **Database:** PostgreSQL via **Prisma 6** (`backend/prisma/schema.prisma` + migrations).
+- **Auth:** phone + password JWT login exists today (built for the admin console; the guard/roles layer is OTP-ready). Phone-number OTP for coordinators/members is still the plan — swap the credential check, keep the JWT + role guards.
 - **Notifications:** WhatsApp / SMS *(e.g. WhatsApp Business API, or a provider like Termii / Africa's Talking)*.
-- **Payments:** none held in-app. If "pay in app" is ever added, it must settle **directly** to the recipient via a licensed processor (Paystack/Flutterwave), never into a BookAm-controlled account.
+- **Payments:** none held in-app for **ajo contributions** (see "The money rule"). BookAm's **own SaaS subscription fees** (coordinators paying for the software) are legitimate revenue and are managed as records in the admin console; actual charge collection via Paystack is a marked `// TODO: Paystack` integration point in `backend/src/admin/subscriptions.service.ts`.
 
 ---
 
@@ -55,14 +53,24 @@ Monorepo with separate backend and frontend apps. Update this map as the repo gr
 
 ```
 BOOKAM/
-├── backend/            # standalone API server (TypeScript)
-│   ├── src/            # routes/controllers, services, db access
-│   ├── prisma/         # schema.prisma + migrations   (if using Prisma)
+├── backend/            # NestJS API server (TypeScript)
+│   ├── src/
+│   │   ├── prisma/     # PrismaService + global module
+│   │   ├── auth/       # JWT login, /auth/me, JwtAuthGuard, Roles/RolesGuard
+│   │   └── admin/      # /admin/* endpoints (overview, applications, plans,
+│   │   │               #   subscriptions, users) — all guarded by ADMIN role
+│   ├── prisma/         # schema.prisma, migrations/, seed.ts
 │   └── .env.example
 ├── frontend/           # Next.js (App Router) + TS + Tailwind — web app + landing
-│   ├── app/            # routes, incl. the marketing landing
-│   ├── components/     # UI components (landing/*, app/*)
-│   └── lib/            # api client, helpers
+│   ├── app/
+│   │   ├── (marketing)/        # landing page
+│   │   └── admin/              # platform-owner console
+│   │       ├── login/          # admin sign-in
+│   │       └── (dashboard)/    # guarded shell: overview, applications,
+│   │                           #   subscriptions, users, settings
+│   ├── components/     # UI components (landing/*, admin/*)
+│   ├── lib/admin/      # typed API client + mirrored API types
+│   └── .env.example
 ├── .gitignore
 └── CLAUDE.md           # this file (repo root)
 ```
@@ -76,8 +84,16 @@ logic in `backend/` and UI in `frontend/` — don't mix them.
 
 > These are the domain entities. Refine as you build; keep this section in sync with the actual schema.
 
-- **User** — a person. May be a coordinator, a member, or both. Identified by phone number.
-- **Circle** — one rotating savings group. Has: name, contribution amount, frequency (daily/weekly/monthly), member count, status, and the coordinator (a User).
+Implemented in `backend/prisma/schema.prisma` (✓ = in the schema today):
+
+- **User** ✓ — a person. May be a coordinator, a member, or both. Identified by phone number. Has `role` (MEMBER | COORDINATOR | ADMIN), `status` (ACTIVE | SUSPENDED), and an optional `passwordHash` (admin login stopgap until OTP).
+- **CollectorApplication** ✓ — a user's request to become a coordinator: applicant, status (PENDING | APPROVED | REJECTED), applicant's note, reviewNote, reviewedBy, reviewedAt. Approving promotes the applicant to COORDINATOR.
+- **SubscriptionPlan** ✓ — a BookAm SaaS pricing tier: name, priceNaira, interval (MONTHLY | QUARTERLY | YEARLY), maxCircles (null = unlimited), features[], active. *This is BookAm's own revenue, not ajo money.*
+- **Subscription** ✓ — which user is on which plan: status (ACTIVE | EXPIRED | CANCELLED), periodStart/periodEnd. Records only; Paystack charge collection is a marked TODO.
+- **Circle** ✓ (minimal) — one rotating savings group. Has: name, contribution amount, frequency (daily/weekly/monthly), status, and the coordinator (a User). Memberships/cycles still to come.
+
+Still to build:
+
 - **Membership** — links a User to a Circle, with their **position** in the payout rotation.
 - **Cycle** — one full rotation of a Circle (or one contribution period, depending on model). Tracks which period is active.
 - **Contribution** — a single payment record: which Membership, which Cycle/period, amount, marked-paid timestamp, and who recorded it. **This is a record only — no funds move.**
@@ -107,13 +123,25 @@ Key rules to encode: a member's rotation position is unique within a Circle; con
 
 ---
 
+## Running locally
+
+- **Backend** (`backend/`): copy `.env.example` → `.env` (needs a running PostgreSQL), then
+  `pnpm install`, `npx prisma migrate dev`, `npx prisma db seed`, `pnpm start:dev` → API on :4000.
+- **Frontend** (`frontend/`): copy `.env.example` → `.env.local` (defaults to :4000), then
+  `pnpm install`, `pnpm dev` → app on :3000. Admin console at `/admin` (seeded admin:
+  phone `+2348000000001`, password `admin1234` — change via `SEED_ADMIN_*` env vars).
+
+---
+
 ## Current status / roadmap
 
 > Keep these checkboxes current.
 
 - [x] Marketing landing page (Next.js + TS + Tailwind)
-- [ ] Database schema + migrations
-- [ ] Phone OTP auth
+- [x] Database schema + migrations (users/roles, collector applications, plans, subscriptions, minimal circles — memberships/cycles/contributions still pending)
+- [ ] Phone OTP auth (JWT + role guards exist; swap the password check for OTP)
+- [x] Platform admin dashboard (overview metrics, collector request review, subscription plans/records, user suspend/reactivate, settings placeholder)
+- [ ] Paystack integration for BookAm subscription fees (records exist; `// TODO: Paystack` in subscriptions.service.ts)
 - [ ] Create / manage circles
 - [ ] Add members + set rotation order
 - [ ] Record contributions (mark paid / owing)
