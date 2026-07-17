@@ -1,10 +1,21 @@
 "use client";
 
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useMember } from "@/components/member/MemberShell";
-import { formatNaira, FREQUENCY_LABEL } from "@/lib/member/api";
-import type { MyCircleCard } from "@/lib/member/types";
-import { Card, EmptyState, PageHeader } from "@/components/admin/ui";
+import { formatNaira, FREQUENCY_LABEL, memberApi } from "@/lib/member/api";
+import type { MyCircleCard, MyCollectorApplication } from "@/lib/member/types";
+import {
+  Button,
+  Card,
+  EmptyState,
+  ErrorNote,
+  Field,
+  Modal,
+  PageHeader,
+  StatusBadge,
+  inputClass,
+} from "@/components/admin/ui";
 import { ContributionBadge } from "@/components/dashboard/ui";
 
 /** The reassurance line: where am I in the queue, in plain words. */
@@ -105,6 +116,154 @@ export default function MyCirclesPage() {
           ))}
         </div>
       )}
+
+      <BecomeCollectorCard />
     </div>
+  );
+}
+
+/**
+ * Contributor → collector: apply with a note; the platform admin reviews.
+ * Everyone starts as a member — this is the only way up.
+ */
+function BecomeCollectorCard() {
+  const { user } = useMember();
+  const [application, setApplication] = useState<
+    MyCollectorApplication | null | undefined
+  >(undefined);
+  const [applying, setApplying] = useState(false);
+
+  const load = useCallback(() => {
+    memberApi.myCollectorApplication().then(setApplication, () =>
+      setApplication(null),
+    );
+  }, []);
+
+  useEffect(load, [load]);
+
+  if (user.role !== "MEMBER") {
+    return (
+      <Card className="mt-6 px-5 py-4">
+        <p className="text-sm text-ink/80">
+          You&apos;re a collector — run your circles from the{" "}
+          <Link
+            href="/dashboard"
+            className="font-semibold text-green underline underline-offset-2"
+          >
+            coordinator dashboard
+          </Link>
+          .
+        </p>
+      </Card>
+    );
+  }
+  if (application === undefined) return null;
+
+  return (
+    <Card className="mt-6 px-5 py-5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="font-display text-lg font-bold">Run your own circle?</h2>
+        {application ? <StatusBadge status={application.status} /> : null}
+      </div>
+
+      {!application || application.status === "REJECTED" ? (
+        <>
+          <p className="mt-1.5 text-sm text-ink/80">
+            {application?.status === "REJECTED" ? (
+              <>
+                Your last application wasn&apos;t approved
+                {application.reviewNote ? (
+                  <> — &ldquo;{application.reviewNote}&rdquo;</>
+                ) : null}
+                . You can apply again.
+              </>
+            ) : (
+              "Already the alajo of a WhatsApp group? Apply to become a collector and move your collection card into BookAm."
+            )}
+          </p>
+          <div className="mt-3">
+            <Button onClick={() => setApplying(true)}>
+              Apply to be a collector
+            </Button>
+          </div>
+        </>
+      ) : application.status === "PENDING" ? (
+        <p className="mt-1.5 text-sm text-ink/80">
+          Your application is with the BookAm admin — you&apos;ll be upgraded
+          as soon as it&apos;s approved.
+        </p>
+      ) : (
+        <p className="mt-1.5 text-sm text-ink/80">
+          Approved! Sign out and back in to open your coordinator dashboard.
+        </p>
+      )}
+
+      {applying ? (
+        <ApplyCollectorModal
+          onClose={() => setApplying(false)}
+          onDone={() => {
+            setApplying(false);
+            load();
+          }}
+        />
+      ) : null}
+    </Card>
+  );
+}
+
+function ApplyCollectorModal({
+  onClose,
+  onDone,
+}: {
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const [note, setNote] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setSubmitting(true);
+    try {
+      await memberApi.applyCollector(note);
+      onDone();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not apply");
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <Modal title="Apply to be a collector" onClose={onClose}>
+      <form onSubmit={(e) => void submit(e)} className="space-y-4">
+        <p className="text-sm text-ink/80">
+          Tell the BookAm admin about the ajo you run (or plan to run) — group
+          size, how long, where. It helps them approve you faster.
+        </p>
+        {error ? <ErrorNote message={error} /> : null}
+        <Field label="About your ajo (10–500 characters)">
+          <textarea
+            required
+            minLength={10}
+            maxLength={500}
+            rows={4}
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="e.g. I coordinate a 12-person weekly ajo for traders in Balogun market, 3 years running…"
+            className={inputClass}
+          />
+        </Field>
+        <div className="flex justify-end gap-2">
+          <Button variant="ghost" type="button" onClick={onClose} disabled={submitting}>
+            Cancel
+          </Button>
+          <Button type="submit" disabled={submitting}>
+            {submitting ? "Sending…" : "Send application"}
+          </Button>
+        </div>
+      </form>
+    </Modal>
   );
 }

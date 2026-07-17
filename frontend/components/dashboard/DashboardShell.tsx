@@ -62,7 +62,7 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
         if (me.role !== "COORDINATOR") {
           // Signed in but not an alajo — this workspace is not for them.
           setToken(null);
-          router.replace("/dashboard/login");
+          router.replace("/login");
           return;
         }
         const list = await coordinatorApi.listCircles();
@@ -76,7 +76,7 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
         if (e instanceof ApiError && (e.status === 401 || e.status === 403)) {
           setToken(null);
         }
-        router.replace("/dashboard/login");
+        router.replace("/login");
       });
     return () => {
       cancelled = true;
@@ -93,7 +93,7 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
 
   const signOut = () => {
     setToken(null);
-    router.replace("/dashboard/login");
+    router.replace("/login");
   };
 
   const activeCircleId = circleIdFromPath(pathname);

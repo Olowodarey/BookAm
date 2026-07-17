@@ -41,7 +41,7 @@ BookAm is **tracking-only**. Members pay each other **directly**, exactly as the
 - **Frontend:** `frontend/` — Next.js 16 (App Router) + TypeScript + Tailwind CSS v4 (web app + marketing landing + admin console).
 - **Backend:** `backend/` — NestJS 11 (TypeScript, CommonJS), standalone API server on port **4000**.
 - **Database:** PostgreSQL via **Prisma 6** (`backend/prisma/schema.prisma` + migrations).
-- **Auth:** phone + password JWT login exists today (built for the admin console; the guard/roles layer is OTP-ready). Phone-number OTP for coordinators/members is still the plan — swap the credential check, keep the JWT + role guards.
+- **Auth:** everyone registers as a contributor (MEMBER) with phone + password; the phone is OTP-verified (`PhoneOtp` model; delivery is a `// TODO: WhatsApp/Termii` in `backend/src/auth/otp.service.ts` — dev builds surface the code as `devCode`). Verifying a phone auto-claims any circle memberships coordinators created for that number. "Sign in with Google" is an optional extra credential (verified server-side via Google's tokeninfo endpoint, no SDK; enabled by setting `GOOGLE_CLIENT_ID` + `NEXT_PUBLIC_GOOGLE_CLIENT_ID`) — Google users still link + verify a phone. Becoming a COLLECTOR goes through a `CollectorApplication` (applied from `/me`, approved by the admin). Unified sign-in at `/login` routes by role; JWT + role guards unchanged.
 - **Notifications:** WhatsApp / SMS *(e.g. WhatsApp Business API, or a provider like Termii / Africa's Talking)*.
 - **Payments:** none held in-app for **ajo contributions** (see "The money rule"). BookAm's **own SaaS subscription fees** (coordinators paying for the software) are legitimate revenue and are managed as records in the admin console; actual charge collection via Paystack is a marked `// TODO: Paystack` integration point in `backend/src/admin/subscriptions.service.ts`.
 
@@ -71,6 +71,8 @@ BOOKAM/
 ├── frontend/           # Next.js (App Router) + TS + Tailwind — web app + landing
 │   ├── app/
 │   │   ├── (marketing)/        # landing page
+│   │   ├── login/, register/   # unified auth (phone+password, OTP step,
+│   │   │                       #   optional Google) — routes users by role
 │   │   ├── admin/              # platform-owner console
 │   │   │   ├── login/          # admin sign-in
 │   │   │   └── (dashboard)/    # guarded shell: overview, applications,
@@ -85,7 +87,8 @@ BOOKAM/
 │   │   │   └── (app)/          # shell: my circles + per-circle
 │   │   │       └── circles/[id]/   # overview + my receipt, members, appeals
 │   │   └── join/[token]/       # public invite page (member joins a circle)
-│   ├── components/     # UI components (landing/*, admin/*, dashboard/*, member/*)
+│   ├── components/     # UI components (landing/*, admin/*, dashboard/*, member/*, auth/*)
+│   ├── lib/auth/       # unified auth client (login/register/OTP/Google, role routing)
 │   ├── lib/admin/      # typed API client + mirrored API types (admin console)
 │   ├── lib/dashboard/  # typed API client + mirrored API types (coordinator)
 │   ├── lib/member/     # typed API client + mirrored API types (member view)
@@ -166,7 +169,9 @@ Key rules encoded: rotation position is managed per-circle in the service layer;
 
 - [x] Marketing landing page (Next.js + TS + Tailwind)
 - [x] Database schema + migrations (users/roles, collector applications, plans, subscriptions, minimal circles — memberships/cycles/contributions still pending)
-- [ ] Phone OTP auth (JWT + role guards exist; swap the password check for OTP)
+- [x] Registration + phone OTP verification (everyone joins as contributor; OTP delivery is a `// TODO: WhatsApp/Termii` — dev shows the code; verified phones auto-claim memberships)
+- [x] Unified `/login` + `/register` with role-based routing; member "apply to be a collector" flow feeding the existing admin review screen
+- [ ] Google sign-in — built end to end but disabled until `GOOGLE_CLIENT_ID` / `NEXT_PUBLIC_GOOGLE_CLIENT_ID` are set (create an OAuth client in Google Cloud Console)
 - [x] Platform admin dashboard (overview metrics, collector request review, subscription plans/records, user suspend/reactivate, settings placeholder)
 - [ ] Paystack integration for BookAm subscription fees (records exist; `// TODO: Paystack` in subscriptions.service.ts)
 - [x] Create / manage circles

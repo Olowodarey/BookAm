@@ -3,6 +3,7 @@ import type {
   LoginResponse,
   MemberCircleDetail,
   MyCircleCard,
+  MyCollectorApplication,
   MyContribution,
   SafeUser,
   VoteValue,
@@ -118,6 +119,15 @@ export const memberApi = {
   // My one write action: my own receipt for the open round
   uploadMyReceipt: (circleId: string, file: File) =>
     upload<MyContribution>(`/member/circles/${circleId}/receipt`, file),
+
+  // Become a collector (reviewed by the platform admin)
+  myCollectorApplication: () =>
+    request<MyCollectorApplication | null>("/member/collector-application"),
+  applyCollector: (note: string) =>
+    request<MyCollectorApplication>("/member/collector-application", {
+      method: "POST",
+      body: { note },
+    }),
 
   // Appeals + advisory voting
   listAppeals: (circleId: string) =>

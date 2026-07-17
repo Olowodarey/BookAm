@@ -58,12 +58,20 @@ export default function Nav() {
           ))}
         </div>
 
-        <a
-          href="#early-access"
-          className="rounded-xl bg-green px-4 py-2 text-sm font-semibold text-paper transition-colors hover:bg-green-deep"
-        >
-          Get early access
-        </a>
+        <div className="flex items-center gap-2">
+          <a
+            href="/login"
+            className="rounded-xl border border-line px-4 py-2 text-sm font-semibold text-ink/80 transition-colors hover:border-green hover:text-green"
+          >
+            Sign in
+          </a>
+          <a
+            href="#early-access"
+            className="rounded-xl bg-green px-4 py-2 text-sm font-semibold text-paper transition-colors hover:bg-green-deep"
+          >
+            Get early access
+          </a>
+        </div>
       </nav>
     </header>
   );

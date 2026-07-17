@@ -1,4 +1,5 @@
 import type {
+  ApplicationStatus,
   CircleFrequency,
   CircleStatus,
   ContributionStatus,
@@ -61,6 +62,16 @@ export interface MyContribution {
   amountNaira: number;
   receiptFileUrl: string | null;
   rejectionReason: string | null;
+}
+
+/** The member's own "become a collector" request, as shown on their home. */
+export interface MyCollectorApplication {
+  id: string;
+  status: ApplicationStatus;
+  note: string | null;
+  reviewNote: string | null;
+  createdAt: Date;
+  reviewedAt: Date | null;
 }
 
 export interface MemberCircleDetail {

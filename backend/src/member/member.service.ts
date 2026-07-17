@@ -18,6 +18,7 @@ import type {
   MemberCircleDetail,
   MemberRow,
   MyCircleCard,
+  MyCollectorApplication,
   MyContribution,
   RotationSlot,
 } from './member.types';
@@ -227,6 +228,69 @@ export class MemberService {
       },
     });
     return this.toMyContribution(updated, circle);
+  }
+
+  // ---- Become a collector --------------------------------------------------
+
+  /** The member's latest application to become a collector, if any. */
+  async myCollectorApplication(
+    userId: string,
+  ): Promise<MyCollectorApplication | null> {
+    const application = await this.prisma.collectorApplication.findFirst({
+      where: { applicantId: userId },
+      orderBy: { createdAt: 'desc' },
+    });
+    return application ? this.toMyApplication(application) : null;
+  }
+
+  /**
+   * Contributor → collector starts here: one PENDING application at a time,
+   * reviewed by the platform admin (who promotes the role on approval).
+   */
+  async applyCollector(
+    userId: string,
+    note: string,
+  ): Promise<MyCollectorApplication> {
+    const user = await this.prisma.user.findUniqueOrThrow({
+      where: { id: userId },
+    });
+    if (user.role !== 'MEMBER') {
+      throw new ConflictException(
+        user.role === 'COORDINATOR'
+          ? 'You are already a collector'
+          : 'This account cannot apply to be a collector',
+      );
+    }
+    const pending = await this.prisma.collectorApplication.findFirst({
+      where: { applicantId: userId, status: 'PENDING' },
+    });
+    if (pending) {
+      throw new ConflictException(
+        'Your application is already with the admin — hold on for their review',
+      );
+    }
+    const application = await this.prisma.collectorApplication.create({
+      data: { applicantId: userId, note },
+    });
+    return this.toMyApplication(application);
+  }
+
+  private toMyApplication(application: {
+    id: string;
+    status: MyCollectorApplication['status'];
+    note: string | null;
+    reviewNote: string | null;
+    createdAt: Date;
+    reviewedAt: Date | null;
+  }): MyCollectorApplication {
+    return {
+      id: application.id,
+      status: application.status,
+      note: application.note,
+      reviewNote: application.reviewNote,
+      createdAt: application.createdAt,
+      reviewedAt: application.reviewedAt,
+    };
   }
 
   /** Position in the not-yet-collected queue; null once collected or empty. */

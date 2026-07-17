@@ -20,6 +20,17 @@ import type {
 
 export type AppealStatus = "OPEN" | "APPROVED" | "REJECTED" | "WITHDRAWN";
 export type VoteValue = "SUPPORT" | "OPPOSE";
+export type ApplicationStatus = "PENDING" | "APPROVED" | "REJECTED";
+
+/** The member's own "become a collector" request, as shown on their home. */
+export interface MyCollectorApplication {
+  id: string;
+  status: ApplicationStatus;
+  note: string | null;
+  reviewNote: string | null;
+  createdAt: string;
+  reviewedAt: string | null;
+}
 
 /** One card on the member's home screen — their view of one circle. */
 export interface MyCircleCard {

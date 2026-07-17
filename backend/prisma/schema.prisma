@@ -83,16 +83,21 @@ enum VoteValue {
 }
 
 model User {
-  id           String     @id @default(cuid())
-  phone        String     @unique
-  name         String
-  // Password auth is a stopgap for the admin dashboard; phone-OTP login
-  // (roadmap) will replace the credential check without touching roles.
-  passwordHash String?
-  role         Role       @default(MEMBER)
-  status       UserStatus @default(ACTIVE)
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  id              String     @id @default(cuid())
+  phone           String     @unique
+  name            String
+  // Password sign-in; Google users may not have one.
+  passwordHash    String?
+  // Set once the phone is confirmed via OTP — the phone is BookAm's primary
+  // identity (it ties accounts to WhatsApp-group circle memberships).
+  phoneVerifiedAt DateTime?
+  // Google sign-in (optional second credential; phone is still required).
+  email           String?    @unique
+  googleId        String?    @unique
+  role            Role       @default(MEMBER)
+  status          UserStatus @default(ACTIVE)
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
 
   applications          CollectorApplication[] @relation("Applicant")
   reviewedApplications  CollectorApplication[] @relation("Reviewer")
@@ -264,6 +269,21 @@ model Payout {
   updatedAt      DateTime     @updatedAt
 
   @@index([collectorId])
+}
+
+// One-time codes for phone verification. Codes are stored hashed and the
+// send itself happens outside the DB (see OtpService — WhatsApp/SMS TODO).
+model PhoneOtp {
+  id         String    @id @default(cuid())
+  phone      String
+  codeHash   String
+  expiresAt  DateTime
+  // Wrong guesses; the code locks after too many.
+  attempts   Int       @default(0)
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([phone, createdAt])
 }
 
 // A member's request to be considered to collect next. Voting is advisory;

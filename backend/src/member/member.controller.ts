@@ -21,6 +21,7 @@ import {
   type ReceiptFile,
 } from '../circles/receipt-storage.service';
 import { CreateAppealDto, VoteDto } from '../circles/dto/appeal.dto';
+import { ApplyCollectorDto } from './dto/collector-application.dto';
 import { MemberService } from './member.service';
 
 /**
@@ -64,6 +65,21 @@ export class MemberController {
     @UploadedFile() file: ReceiptFile | undefined,
   ) {
     return this.member.uploadMyReceipt(circleId, user.id, file);
+  }
+
+  // ---- Become a collector --------------------------------------------------
+
+  @Get('collector-application')
+  myCollectorApplication(@CurrentUser() user: SafeUser) {
+    return this.member.myCollectorApplication(user.id);
+  }
+
+  @Post('collector-application')
+  applyCollector(
+    @CurrentUser() user: SafeUser,
+    @Body() dto: ApplyCollectorDto,
+  ) {
+    return this.member.applyCollector(user.id, dto.note);
   }
 
   // ---- Appeals -------------------------------------------------------------

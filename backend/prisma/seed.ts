@@ -393,6 +393,13 @@ async function main() {
     }
   }
 
+  // Seeded accounts skip OTP — mark every user's phone as verified so the
+  // demo/test logins work without a code.
+  await prisma.user.updateMany({
+    where: { phoneVerifiedAt: null },
+    data: { phoneVerifiedAt: new Date() },
+  });
+
   console.log('Seed complete.');
 }
 

@@ -74,7 +74,7 @@ export default function MemberShell({ children }: { children: ReactNode }) {
         if (e instanceof ApiError && (e.status === 401 || e.status === 403)) {
           setToken(null);
         }
-        router.replace("/me/login");
+        router.replace("/login");
       });
     return () => {
       cancelled = true;
@@ -91,7 +91,7 @@ export default function MemberShell({ children }: { children: ReactNode }) {
 
   const signOut = () => {
     setToken(null);
-    router.replace("/me/login");
+    router.replace("/login");
   };
 
   const activeCircleId = circleIdFromPath(pathname);
