@@ -9,6 +9,7 @@ import type {
   LoginResponse,
   MemberInfo,
   PayoutInfo,
+  ProfileInput,
   ReminderInfo,
   SafeUser,
 } from "./types";
@@ -114,6 +115,15 @@ export const coordinatorApi = {
       body: { phone, password },
     }),
   me: () => request<SafeUser>("/auth/me"),
+
+  // Settings (shared /auth endpoints, this dashboard's token)
+  updateProfile: (input: ProfileInput) =>
+    request<SafeUser>("/auth/profile", { method: "PATCH", body: input }),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    request<{ changed: true }>("/auth/change-password", {
+      method: "POST",
+      body: { currentPassword, newPassword },
+    }),
 
   // Circles
   listCircles: () => request<CircleSummary[]>("/circles"),

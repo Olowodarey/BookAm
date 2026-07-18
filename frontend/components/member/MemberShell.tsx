@@ -152,6 +152,11 @@ export default function MemberShell({ children }: { children: ReactNode }) {
           </Link>
           <nav aria-label="Member" className="flex-1 space-y-1 px-3 py-4">
             {navLink("/me", "My circles", pathname === "/me", false)}
+            {navLink("/me/settings", "Settings", pathname === "/me/settings", false)}
+            {/* A collector can also save in circles — let them hop across. */}
+            {user.role === "COORDINATOR"
+              ? navLink("/dashboard", "Circles I run ↗", false, false)
+              : null}
             {activeCircleId ? (
               <div className="pt-3">
                 <p className="px-3 pb-1 font-mono text-[10px] font-bold uppercase tracking-wide text-paper/50">
@@ -193,6 +198,10 @@ export default function MemberShell({ children }: { children: ReactNode }) {
               className="flex gap-1 overflow-x-auto border-t border-line px-2 py-1.5 md:hidden"
             >
               {navLink("/me", "My circles", pathname === "/me", true)}
+              {navLink("/me/settings", "Settings", pathname === "/me/settings", true)}
+              {user.role === "COORDINATOR"
+                ? navLink("/dashboard", "Circles I run ↗", false, true)
+                : null}
               {circleLinks(true)}
             </nav>
           </header>

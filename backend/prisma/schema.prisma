@@ -83,21 +83,27 @@ enum VoteValue {
 }
 
 model User {
-  id              String     @id @default(cuid())
-  phone           String     @unique
-  name            String
+  id                String     @id @default(cuid())
+  phone             String     @unique
+  name              String
   // Password sign-in; Google users may not have one.
-  passwordHash    String?
+  passwordHash      String?
   // Set once the phone is confirmed via OTP — the phone is BookAm's primary
   // identity (it ties accounts to WhatsApp-group circle memberships).
-  phoneVerifiedAt DateTime?
+  phoneVerifiedAt   DateTime?
   // Google sign-in (optional second credential; phone is still required).
-  email           String?    @unique
-  googleId        String?    @unique
-  role            Role       @default(MEMBER)
-  status          UserStatus @default(ACTIVE)
-  createdAt       DateTime   @default(now())
-  updatedAt       DateTime   @updatedAt
+  email             String?    @unique
+  googleId          String?    @unique
+  // Profile/settings — records only, so circles know where to send money
+  // OUTSIDE BookAm. Never used to move funds in-app.
+  altPhone          String?
+  bankName          String?
+  bankAccountNumber String?
+  bankAccountName   String?
+  role              Role       @default(MEMBER)
+  status            UserStatus @default(ACTIVE)
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
 
   applications          CollectorApplication[] @relation("Applicant")
   reviewedApplications  CollectorApplication[] @relation("Reviewer")

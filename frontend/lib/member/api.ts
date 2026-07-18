@@ -5,6 +5,7 @@ import type {
   MyCircleCard,
   MyCollectorApplication,
   MyContribution,
+  ProfileInput,
   SafeUser,
   VoteValue,
 } from "./types";
@@ -112,6 +113,15 @@ export const memberApi = {
   me: () => request<SafeUser>("/auth/me"),
 
   // My circles (read)
+  // Settings (shared /auth endpoints, this dashboard's token)
+  updateProfile: (input: ProfileInput) =>
+    request<SafeUser>("/auth/profile", { method: "PATCH", body: input }),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    request<{ changed: true }>("/auth/change-password", {
+      method: "POST",
+      body: { currentPassword, newPassword },
+    }),
+
   myCircles: () => request<MyCircleCard[]>("/member/circles"),
   circleDetail: (circleId: string) =>
     request<MemberCircleDetail>(`/member/circles/${circleId}`),

@@ -181,6 +181,23 @@ function MyContributionCard() {
         </p>
       ) : null}
 
+      {contribution.status !== "PAID" && detail.coordinatorAccount ? (
+        <div className="mt-3 rounded-xl border border-gold bg-gold/10 px-4 py-3">
+          <p className="font-mono text-[11px] font-bold uppercase tracking-wide text-green-deep">
+            Pay your contribution to
+          </p>
+          <p className="mt-1 font-mono text-sm font-bold text-ink">
+            {detail.coordinatorAccount.accountNumber}
+            {detail.coordinatorAccount.bankName
+              ? ` · ${detail.coordinatorAccount.bankName}`
+              : ""}
+          </p>
+          <p className="text-sm text-ink/80">
+            {detail.coordinatorAccount.accountName ?? detail.coordinatorName}
+          </p>
+        </div>
+      ) : null}
+
       {error ? (
         <div className="mt-3">
           <ErrorNote message={error} />

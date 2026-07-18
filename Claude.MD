@@ -75,21 +75,24 @@ BOOKAM/
 │   │   │                       #   visitor (sign up → come back → apply inline)
 │   │   ├── login/, register/   # unified auth (phone+password, OTP step,
 │   │   │                       #   optional Google) — routes users by role
+│   │   ├── forgot-password/    # OTP-verified password reset (auto sign-in)
 │   │   ├── admin/              # platform-owner console
 │   │   │   ├── login/          # admin sign-in
 │   │   │   └── (dashboard)/    # guarded shell: overview, applications,
 │   │   │                       #   subscriptions, users, settings
 │   │   ├── dashboard/          # coordinator (alajo) workspace
 │   │   │   ├── login/          # coordinator sign-in
-│   │   │   └── (app)/          # guarded shell: circle list + per-circle
+│   │   │   └── (app)/          # guarded shell: circle list + settings + per-circle
 │   │   │       └── circles/[id]/   # overview (+ appeal decisions), members,
-│   │   │                           #   contributions, payout
+│   │   │                           #   contributions, payout (shows collector's account)
 │   │   ├── me/                 # member (contributor) dashboard — read-mostly
-│   │   │   ├── login/          # member sign-in
-│   │   │   └── (app)/          # shell: my circles + per-circle
-│   │   │       └── circles/[id]/   # overview + my receipt, members, appeals
+│   │   │   ├── login/          # (redirects to /login)
+│   │   │   └── (app)/          # shell: my circles + settings + per-circle
+│   │   │       └── circles/[id]/   # overview + my receipt (+ coordinator's
+│   │   │                           #   "pay to" account), members, appeals
 │   │   └── join/[token]/       # public invite page (member joins a circle)
-│   ├── components/     # UI components (landing/*, admin/*, dashboard/*, member/*, auth/*)
+│   ├── components/     # UI components (landing/*, admin/*, dashboard/*, member/*,
+│   │                   #   auth/*, settings/* — shared profile/password form)
 │   ├── lib/auth/       # unified auth client (login/register/OTP/Google, role routing)
 │   ├── lib/admin/      # typed API client + mirrored API types (admin console)
 │   ├── lib/dashboard/  # typed API client + mirrored API types (coordinator)
@@ -173,8 +176,12 @@ Key rules encoded: rotation position is managed per-circle in the service layer;
 - [x] Database schema + migrations (users/roles, collector applications, plans, subscriptions, minimal circles — memberships/cycles/contributions still pending)
 - [x] Registration + phone OTP verification (everyone joins as contributor; OTP delivery is a `// TODO: WhatsApp/Termii` — dev shows the code; verified phones auto-claim memberships)
 - [x] Unified `/login` + `/register` with role-based routing; member "apply to be a collector" flow feeding the existing admin review screen
-- [x] Public `/become-a-collector` page (linked from the landing nav + final CTA) — pitch + three steps + auth-aware apply section; signs visitors up and returns them to apply
+- [x] Public `/become-a-collector` page (linked from the landing nav + final CTA) — pitch + three steps + auth-aware apply section; signs visitors up and returns them to apply. **Applying happens ONLY on this page** (it will be subscription-gated later — `// TODO: Paystack` in member.service.applyCollector); `/me` shows application *status* only.
+- [x] Dual-role support: a collector can also save as a contributor in other circles (memberships are phone-based; `/member/*` has no role gate). Cross-links: "My contributions ↗" in the coordinator sidebar, "Circles I run ↗" in the member nav for coordinators.
 - [ ] Google sign-in — built end to end but disabled until `GOOGLE_CLIENT_ID` / `NEXT_PUBLIC_GOOGLE_CLIENT_ID` are set (create an OAuth client in Google Cloud Console)
+- [x] Forgot password (`/forgot-password`, linked from `/login`) — OTP proves phone ownership, sets the new password and signs straight in
+- [x] Settings page shared by both dashboards (`/me/settings`, `/dashboard/settings`) — name, second phone, "account to be paid to" (bank/NUBAN/account name — display-only records), change password. User gained `altPhone` + bank fields.
+- [x] Payout account surfacing: coordinator's payout screen shows the collector's saved account ("send the pot to"); a member's circle overview shows the coordinator's account ("pay your contribution to"). Records only — transfers stay outside BookAm.
 - [x] Platform admin dashboard (overview metrics, collector request review, subscription plans/records, user suspend/reactivate, settings placeholder)
 - [ ] Paystack integration for BookAm subscription fees (records exist; `// TODO: Paystack` in subscriptions.service.ts)
 - [x] Create / manage circles

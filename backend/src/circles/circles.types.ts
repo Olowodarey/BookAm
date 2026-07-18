@@ -61,6 +61,17 @@ export interface ContributionInfo {
   updatedAt: Date;
 }
 
+/**
+ * Where to send someone money OUTSIDE BookAm — copied from their profile
+ * settings. Display-only; BookAm never initiates a transfer.
+ */
+export interface PayoutAccount {
+  bankName: string | null;
+  accountNumber: string;
+  accountName: string | null;
+  altPhone: string | null;
+}
+
 export interface PayoutInfo {
   id: string;
   status: PayoutStatus;
@@ -76,6 +87,8 @@ export interface ActiveCycleInfo {
   status: CycleStatus;
   startedAt: Date;
   collector: MemberInfo | null;
+  /** The collector's bank details (from their profile), if they set them. */
+  collectorAccount: PayoutAccount | null;
   /** Sum of PAID contributions so far this cycle. */
   potNaira: number;
   /** amount × active members — what a full cycle would total. */

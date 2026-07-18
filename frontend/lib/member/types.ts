@@ -5,12 +5,14 @@
  * Auth shapes are shared with the other consoles via lib/admin/types.
  */
 
-export type { LoginResponse, SafeUser } from "../admin/types";
+export type { LoginResponse, ProfileInput, SafeUser } from "../admin/types";
 export type {
   CircleFrequency,
   CircleStatus,
   ContributionStatus,
+  PayoutAccount,
 } from "../dashboard/types";
+import type { PayoutAccount } from "../dashboard/types";
 
 import type {
   CircleFrequency,
@@ -89,6 +91,8 @@ export interface MemberCircleDetail {
   frequency: CircleFrequency;
   circleStatus: CircleStatus;
   coordinatorName: string;
+  /** The coordinator's account — where members send contributions. */
+  coordinatorAccount: PayoutAccount | null;
   memberTarget: number;
   cycleIndex: number | null;
   collector: RotationSlot | null;

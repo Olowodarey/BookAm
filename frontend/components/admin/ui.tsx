@@ -140,17 +140,31 @@ export function Modal({
   children: ReactNode;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
+  const unmounted = useRef(false);
 
   useEffect(() => {
     const dialog = ref.current;
-    dialog?.showModal();
-    return () => dialog?.close();
+    unmounted.current = false;
+    if (dialog && !dialog.open) dialog.showModal();
+    return () => {
+      unmounted.current = true;
+      if (dialog?.open) dialog.close();
+    };
   }, []);
+
+  // dialog.close() in the cleanup above QUEUES a `close` event, which then
+  // fires after a StrictMode effect replay (dialog already reopened) or
+  // after unmount — calling onClose for those stale events closed modals
+  // the instant they opened. Only forward genuine user closes (Esc).
+  const handleClose = () => {
+    if (unmounted.current || ref.current?.open) return;
+    onClose();
+  };
 
   return (
     <dialog
       ref={ref}
-      onClose={onClose}
+      onClose={handleClose}
       onClick={(e) => {
         if (e.target === ref.current) onClose();
       }}

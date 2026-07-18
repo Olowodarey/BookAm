@@ -161,6 +161,9 @@ export class MemberService {
       frequency: circle.frequency,
       circleStatus: circle.status,
       coordinatorName: circle.coordinator.name,
+      coordinatorAccount: await this.circles.payoutAccountFor(
+        circle.coordinatorId,
+      ),
       memberTarget: circle.memberTarget,
       cycleIndex: state?.cycle.index ?? null,
       collector: state?.collector
@@ -246,6 +249,9 @@ export class MemberService {
   /**
    * Contributor → collector starts here: one PENDING application at a time,
    * reviewed by the platform admin (who promotes the role on approval).
+   * Applications are submitted from the /become-a-collector page only.
+   * // TODO: Paystack — gate this behind an active BookAm subscription once
+   * // collector plans become chargeable (see admin/subscriptions.service.ts).
    */
   async applyCollector(
     userId: string,

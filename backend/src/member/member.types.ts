@@ -74,6 +74,14 @@ export interface MyCollectorApplication {
   reviewedAt: Date | null;
 }
 
+/** Where to send money OUTSIDE BookAm — display-only profile record. */
+export interface PayoutAccount {
+  bankName: string | null;
+  accountNumber: string;
+  accountName: string | null;
+  altPhone: string | null;
+}
+
 export interface MemberCircleDetail {
   circleId: string;
   circleName: string;
@@ -81,6 +89,8 @@ export interface MemberCircleDetail {
   frequency: CircleFrequency;
   circleStatus: CircleStatus;
   coordinatorName: string;
+  /** The coordinator's account — where members send contributions. */
+  coordinatorAccount: PayoutAccount | null;
   memberTarget: number;
   cycleIndex: number | null;
   collector: RotationSlot | null;

@@ -15,6 +15,7 @@ import type {
   CircleSummary,
   ContributionInfo,
   MemberInfo,
+  PayoutAccount,
   PayoutInfo,
 } from './circles.types';
 
@@ -181,6 +182,9 @@ export class CirclesService {
         collector: state.collector
           ? this.toMemberInfo(state.collector, collectedIds)
           : null,
+        collectorAccount: await this.payoutAccountFor(
+          state.collector?.userId ?? null,
+        ),
         potNaira: rows
           .filter((r) => r.status === 'PAID')
           .reduce((sum, r) => sum + r.amountNaira, 0),
@@ -243,6 +247,19 @@ export class CirclesService {
       owingCount,
       nextCollectorName: state?.collector?.name ?? null,
       createdAt: circle.createdAt,
+    };
+  }
+
+  /** Bank details from a linked user's profile — display-only record. */
+  async payoutAccountFor(userId: string | null): Promise<PayoutAccount | null> {
+    if (!userId) return null;
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user?.bankAccountNumber) return null;
+    return {
+      bankName: user.bankName,
+      accountNumber: user.bankAccountNumber,
+      accountName: user.bankAccountName ?? user.name,
+      altPhone: user.altPhone,
     };
   }
 

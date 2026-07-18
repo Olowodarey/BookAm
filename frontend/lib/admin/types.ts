@@ -16,7 +16,24 @@ export interface SafeUser {
   name: string;
   role: Role;
   status: UserStatus;
+  email: string | null;
+  /** Second phone number (e.g. the one the circle also knows). */
+  altPhone: string | null;
+  // Where money should be sent to this person OUTSIDE BookAm — a record
+  // shown to their circles, never an in-app payment destination.
+  bankName: string | null;
+  bankAccountNumber: string | null;
+  bankAccountName: string | null;
   createdAt: string;
+}
+
+/** Settings update — all optional; empty string clears a field. */
+export interface ProfileInput {
+  name?: string;
+  altPhone?: string;
+  bankName?: string;
+  bankAccountNumber?: string;
+  bankAccountName?: string;
 }
 
 export interface LoginResponse {

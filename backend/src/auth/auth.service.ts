@@ -27,6 +27,11 @@ export function toSafeUser(user: User): SafeUser {
     name: user.name,
     role: user.role,
     status: user.status,
+    email: user.email,
+    altPhone: user.altPhone,
+    bankName: user.bankName,
+    bankAccountNumber: user.bankAccountNumber,
+    bankAccountName: user.bankAccountName,
     createdAt: user.createdAt,
   };
 }
@@ -257,6 +262,108 @@ export class AuthService {
     }
     const sent = await this.otp.send(phone);
     return { phone, requiresVerification: true, ...sent };
+  }
+
+  // ---- Settings ------------------------------------------------------------
+
+  /** Empty string clears a nullable profile field; undefined leaves it. */
+  private static clearable(value: string | undefined): string | null | undefined {
+    if (value === undefined) return undefined;
+    return value.trim() === '' ? null : value.trim();
+  }
+
+  async updateProfile(
+    userId: string,
+    dto: {
+      name?: string;
+      altPhone?: string;
+      bankName?: string;
+      bankAccountNumber?: string;
+      bankAccountName?: string;
+    },
+  ): Promise<SafeUser> {
+    const user = await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        ...(dto.name !== undefined ? { name: dto.name.trim() } : {}),
+        ...(dto.altPhone !== undefined
+          ? { altPhone: AuthService.clearable(dto.altPhone) }
+          : {}),
+        ...(dto.bankName !== undefined
+          ? { bankName: AuthService.clearable(dto.bankName) }
+          : {}),
+        ...(dto.bankAccountNumber !== undefined
+          ? { bankAccountNumber: AuthService.clearable(dto.bankAccountNumber) }
+          : {}),
+        ...(dto.bankAccountName !== undefined
+          ? { bankAccountName: AuthService.clearable(dto.bankAccountName) }
+          : {}),
+      },
+    });
+    return toSafeUser(user);
+  }
+
+  async changePassword(
+    userId: string,
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<{ changed: true }> {
+    const user = await this.prisma.user.findUniqueOrThrow({
+      where: { id: userId },
+    });
+    if (
+      !user.passwordHash ||
+      !(await bcrypt.compare(currentPassword, user.passwordHash))
+    ) {
+      throw new UnauthorizedException('Current password is not correct');
+    }
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { passwordHash: await bcrypt.hash(newPassword, 10) },
+    });
+    return { changed: true };
+  }
+
+  // ---- Forgot password -----------------------------------------------------
+
+  /** Sends an OTP so the owner of the phone can set a new password. */
+  async forgotPassword(phone: string): Promise<OtpSentResponse> {
+    const user = await this.prisma.user.findUnique({ where: { phone } });
+    if (!user) {
+      throw new BadRequestException(
+        'No account with this phone number — create one instead',
+      );
+    }
+    const sent = await this.otp.send(phone);
+    return { phone, requiresVerification: true, ...sent };
+  }
+
+  /**
+   * The OTP proves phone ownership, so this also verifies the phone and
+   * signs the user straight in with their new password set.
+   */
+  async resetPassword(
+    phone: string,
+    code: string,
+    newPassword: string,
+  ): Promise<LoginResponse> {
+    await this.otp.verify(phone, code);
+    const existing = await this.prisma.user.findUnique({ where: { phone } });
+    if (!existing) {
+      throw new BadRequestException('No account with this phone number');
+    }
+    const user = await this.prisma.user.update({
+      where: { id: existing.id },
+      data: {
+        passwordHash: await bcrypt.hash(newPassword, 10),
+        phoneVerifiedAt: existing.phoneVerifiedAt ?? new Date(),
+      },
+    });
+    if (user.status === 'SUSPENDED') {
+      throw new ForbiddenException('This account is suspended');
+    }
+    await this.claimMemberships(user);
+    return this.issueSession(user);
   }
 
   /**

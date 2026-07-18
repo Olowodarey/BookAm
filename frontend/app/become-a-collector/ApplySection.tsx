@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { getToken, memberApi } from "@/lib/member/api";
-import { setPostAuthRedirect } from "@/lib/auth/api";
+import { clearSession, setPostAuthRedirect } from "@/lib/auth/api";
 import type { MyCollectorApplication, SafeUser } from "@/lib/member/types";
 import {
   Button,
@@ -18,7 +18,8 @@ type Viewer =
   | { kind: "checking" }
   | { kind: "signed-out" }
   | { kind: "member"; user: SafeUser; application: MyCollectorApplication | null }
-  | { kind: "collector" };
+  | { kind: "collector"; name: string }
+  | { kind: "admin"; name: string };
 
 /**
  * The call-to-action at the bottom of /become-a-collector. Visitors are sent
@@ -36,7 +37,10 @@ export default function ApplySection() {
       if (!getToken()) return { kind: "signed-out" };
       try {
         const user = await memberApi.me();
-        if (user.role !== "MEMBER") return { kind: "collector" };
+        if (user.role === "ADMIN") return { kind: "admin", name: user.name };
+        if (user.role === "COORDINATOR") {
+          return { kind: "collector", name: user.name };
+        }
         const application = await memberApi
           .myCollectorApplication()
           .catch(() => null);
@@ -74,6 +78,24 @@ export default function ApplySection() {
           >
             Open my dashboard
           </Link>
+          <SwitchAccount name={viewer.name} onSwitched={load} />
+        </div>
+      ) : viewer.kind === "admin" ? (
+        <div>
+          <h2 className="font-display text-2xl font-bold text-gold">
+            You&apos;re the BookAm admin
+          </h2>
+          <p className="mt-2 max-w-xl text-paper/80">
+            Collector applications land in your admin console — review and
+            approve them there.
+          </p>
+          <Link
+            href="/admin/applications"
+            className="mt-4 inline-block rounded-xl bg-gold px-5 py-2.5 text-sm font-bold text-ink transition-transform hover:-translate-y-0.5"
+          >
+            Review applications
+          </Link>
+          <SwitchAccount name={viewer.name} onSwitched={load} />
         </div>
       ) : (
         <MemberApply
@@ -83,6 +105,32 @@ export default function ApplySection() {
         />
       )}
     </div>
+  );
+}
+
+/** Escape hatch when the browser holds someone else's session. */
+function SwitchAccount({
+  name,
+  onSwitched,
+}: {
+  name: string;
+  onSwitched: () => void;
+}) {
+  return (
+    <p className="mt-4 text-sm text-paper/60">
+      Signed in as {name} —{" "}
+      <button
+        type="button"
+        onClick={() => {
+          clearSession();
+          onSwitched();
+        }}
+        className="font-semibold text-gold underline underline-offset-2"
+      >
+        sign out
+      </button>{" "}
+      to apply with a different account.
+    </p>
   );
 }
 

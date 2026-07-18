@@ -113,6 +113,31 @@ export default function PayoutPage() {
           directly (transfer or cash), then this receipt becomes the record.
         </p>
 
+        {cycle.collectorAccount ? (
+          <div className="mt-3 rounded-xl border border-gold bg-gold/10 px-4 py-3">
+            <p className="font-mono text-[11px] font-bold uppercase tracking-wide text-green-deep">
+              Send the pot to
+            </p>
+            <p className="mt-1 font-mono text-sm font-bold text-ink">
+              {cycle.collectorAccount.accountNumber}
+              {cycle.collectorAccount.bankName
+                ? ` · ${cycle.collectorAccount.bankName}`
+                : ""}
+            </p>
+            <p className="text-sm text-ink/80">
+              {cycle.collectorAccount.accountName}
+              {cycle.collectorAccount.altPhone
+                ? ` · alt: ${cycle.collectorAccount.altPhone}`
+                : ""}
+            </p>
+          </div>
+        ) : collector ? (
+          <p className="mt-3 text-xs text-muted">
+            {collector.name} hasn&apos;t added their bank details in Settings
+            yet — confirm the account with them directly.
+          </p>
+        ) : null}
+
         <div className="mt-4 flex flex-wrap items-center gap-3">
           <ReceiptFileButton
             label={payout?.receiptFileUrl ? "Replace payout receipt" : "Upload payout receipt"}

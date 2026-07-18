@@ -130,6 +130,15 @@ export default function LoginPage() {
             />
           </Field>
 
+          <p className="text-right text-sm">
+            <Link
+              href="/forgot-password"
+              className="font-semibold text-green underline underline-offset-2"
+            >
+              Forgot password?
+            </Link>
+          </p>
+
           <Button type="submit" disabled={submitting} className="w-full">
             {submitting ? "Signing in…" : "Sign in"}
           </Button>

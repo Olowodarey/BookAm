@@ -169,6 +169,24 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
             >
               My circles
             </Link>
+            <Link
+              href="/dashboard/settings"
+              aria-current={pathname === "/dashboard/settings" ? "page" : undefined}
+              className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
+                pathname === "/dashboard/settings"
+                  ? "bg-paper/10 text-gold"
+                  : "text-paper/70 hover:bg-paper/5 hover:text-paper"
+              }`}
+            >
+              Settings
+            </Link>
+            {/* A collector can also save in other people's circles. */}
+            <Link
+              href="/me"
+              className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-paper/70 transition-colors hover:bg-paper/5 hover:text-paper"
+            >
+              My contributions ↗
+            </Link>
 
             {activeCircleId ? (
               <div className="pt-3">
@@ -234,6 +252,23 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
                 }`}
               >
                 My circles
+              </Link>
+              <Link
+                href="/dashboard/settings"
+                aria-current={pathname === "/dashboard/settings" ? "page" : undefined}
+                className={`whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium ${
+                  pathname === "/dashboard/settings"
+                    ? "bg-green text-paper"
+                    : "text-ink/70 hover:bg-ink/5"
+                }`}
+              >
+                Settings
+              </Link>
+              <Link
+                href="/me"
+                className="whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium text-ink/70 hover:bg-ink/5"
+              >
+                My contributions ↗
               </Link>
               {circleNav(true)}
             </nav>

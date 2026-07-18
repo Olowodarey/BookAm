@@ -94,6 +94,11 @@ export const authApi = {
     post<GoogleSignInResponse>("/auth/google", { idToken }),
   googleLinkPhone: (linkToken: string, phone: string) =>
     post<OtpSentResponse>("/auth/google/link-phone", { linkToken, phone }),
+  forgotPassword: (phone: string) =>
+    post<OtpSentResponse>("/auth/forgot-password", { phone }),
+  /** OTP-verified reset; signs the user in with the new password. */
+  resetPassword: (phone: string, code: string, newPassword: string) =>
+    post<LoginResponse>("/auth/reset-password", { phone, code, newPassword }),
 };
 
 // Token keys used by each console's own API client — the unified login
@@ -102,6 +107,18 @@ export const authApi = {
 const MEMBER_TOKEN_KEY = "bookam.member.token";
 const COORDINATOR_TOKEN_KEY = "bookam.coordinator.token";
 const ADMIN_TOKEN_KEY = "bookam.admin.token";
+
+/** Signs out of every BookAm console in this browser. */
+export function clearSession(): void {
+  if (typeof window === "undefined") return;
+  for (const key of [
+    MEMBER_TOKEN_KEY,
+    COORDINATOR_TOKEN_KEY,
+    ADMIN_TOKEN_KEY,
+  ]) {
+    window.localStorage.removeItem(key);
+  }
+}
 
 export function storeSession(session: LoginResponse): void {
   if (typeof window === "undefined") return;

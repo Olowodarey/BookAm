@@ -8,7 +8,15 @@
  * balance BookAm holds.
  */
 
-export type { LoginResponse, SafeUser } from "../admin/types";
+export type { LoginResponse, ProfileInput, SafeUser } from "../admin/types";
+
+/** Where to send money OUTSIDE BookAm — display-only profile record. */
+export interface PayoutAccount {
+  bankName: string | null;
+  accountNumber: string;
+  accountName: string | null;
+  altPhone: string | null;
+}
 
 export type CircleFrequency = "DAILY" | "WEEKLY" | "MONTHLY";
 export type CircleStatus = "ACTIVE" | "COMPLETED" | "PAUSED";
@@ -79,6 +87,8 @@ export interface ActiveCycleInfo {
   status: CycleStatus;
   startedAt: string;
   collector: MemberInfo | null;
+  /** The collector's bank details (from their profile), if they set them. */
+  collectorAccount: PayoutAccount | null;
   /** Sum of PAID contributions so far this cycle. */
   potNaira: number;
   /** amount × active members — what a full cycle would total. */

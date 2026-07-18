@@ -5,5 +5,10 @@ export const safeUserSelect = {
   name: true,
   role: true,
   status: true,
+  email: true,
+  altPhone: true,
+  bankName: true,
+  bankAccountNumber: true,
+  bankAccountName: true,
   createdAt: true,
 } as const;

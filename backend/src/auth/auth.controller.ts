@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Patch, Post, UseGuards } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import {
@@ -8,6 +8,12 @@ import {
   ResendOtpDto,
   VerifyPhoneDto,
 } from './dto/auth.dto';
+import {
+  ChangePasswordDto,
+  ForgotPasswordDto,
+  ResetPasswordDto,
+  UpdateProfileDto,
+} from './dto/profile.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { CurrentUser } from './roles';
 import type {
@@ -52,9 +58,45 @@ export class AuthController {
     return this.authService.linkPhone(dto.linkToken, dto.phone);
   }
 
+  @Post('forgot-password')
+  forgotPassword(@Body() dto: ForgotPasswordDto): Promise<OtpSentResponse> {
+    return this.authService.forgotPassword(dto.phone);
+  }
+
+  @Post('reset-password')
+  resetPassword(@Body() dto: ResetPasswordDto): Promise<LoginResponse> {
+    return this.authService.resetPassword(
+      dto.phone,
+      dto.code,
+      dto.newPassword,
+    );
+  }
+
   @UseGuards(JwtAuthGuard)
   @Get('me')
   me(@CurrentUser() user: SafeUser): SafeUser {
     return user;
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Patch('profile')
+  updateProfile(
+    @CurrentUser() user: SafeUser,
+    @Body() dto: UpdateProfileDto,
+  ): Promise<SafeUser> {
+    return this.authService.updateProfile(user.id, dto);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('change-password')
+  changePassword(
+    @CurrentUser() user: SafeUser,
+    @Body() dto: ChangePasswordDto,
+  ): Promise<{ changed: true }> {
+    return this.authService.changePassword(
+      user.id,
+      dto.currentPassword,
+      dto.newPassword,
+    );
   }
 }

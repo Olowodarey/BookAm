@@ -298,6 +298,14 @@ async function main() {
       passwordHash: await bcrypt.hash(testMemberPassword, 10),
     },
   });
+  // Sample payout accounts so the "pay to" panels have data to show.
+  await prisma.user.updateMany({
+    where: { phone: { in: ['+2348011111111', testCollectorPhone] } },
+    data: {
+      bankName: 'GTBank',
+      bankAccountNumber: '0123456789',
+    },
+  });
   console.log(
     `Test collector ready: ${testCollector.phone} (password: ${testCollectorPassword})`,
   );
