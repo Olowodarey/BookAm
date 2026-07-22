@@ -3,14 +3,21 @@
 import { useState } from "react";
 import { useMemberCircle } from "./layout";
 import { formatNaira, FREQUENCY_LABEL, memberApi } from "@/lib/member/api";
-import { Card, EmptyState, ErrorNote, PageHeader } from "@/components/admin/ui";
+import {
+  Card,
+  EmptyState,
+  ErrorNote,
+  Field,
+  PageHeader,
+  inputClass,
+} from "@/components/admin/ui";
 import {
   ContributionBadge,
   CycleGrid,
   ReceiptFileButton,
-  ReceiptModal,
   Stat,
 } from "@/components/dashboard/ui";
+import { ReceiptLedger } from "@/components/circles/ReceiptLedger";
 
 export default function MemberCircleOverviewPage() {
   const { detail } = useMemberCircle();
@@ -77,6 +84,8 @@ export default function MemberCircleOverviewPage() {
               status: m.status ?? "AWAITING",
             }))}
           />
+
+          <CircleReceipts />
         </>
       )}
     </div>
@@ -138,13 +147,17 @@ function MyContributionCard() {
   const { contribution } = detail.me;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [viewing, setViewing] = useState(false);
+  const [amount, setAmount] = useState("");
+
+  const remaining = Math.max(contribution.amountNaira - contribution.paidNaira, 0);
 
   const upload = async (file: File) => {
     setBusy(true);
     setError(null);
     try {
-      await memberApi.uploadMyReceipt(detail.circleId, file);
+      const parsed = amount.trim() === "" ? undefined : Number(amount);
+      await memberApi.uploadMyReceipt(detail.circleId, file, parsed);
+      setAmount("");
       await refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not upload receipt");
@@ -198,43 +211,117 @@ function MyContributionCard() {
         </div>
       ) : null}
 
+      {contribution.paidNaira > 0 && contribution.status !== "PAID" ? (
+        <p className="mt-3 text-sm text-ink/80">
+          Paid so far:{" "}
+          <span className="font-mono font-bold text-green">
+            {formatNaira(contribution.paidNaira)}
+          </span>{" "}
+          of {formatNaira(contribution.amountNaira)}
+          {remaining > 0 ? (
+            <>
+              {" "}
+              · <span className="font-bold">{formatNaira(remaining)}</span> to go
+            </>
+          ) : null}
+        </p>
+      ) : null}
+
       {error ? (
         <div className="mt-3">
           <ErrorNote message={error} />
         </div>
       ) : null}
 
-      <div className="mt-4 flex flex-wrap items-center gap-3">
-        {contribution.status !== "PAID" ? (
+      {contribution.status !== "PAID" ? (
+        <div className="mt-4 flex flex-wrap items-end gap-3">
+          <div className="w-40">
+            <Field label="Amount paid (optional)">
+              <input
+                type="number"
+                inputMode="numeric"
+                min={1}
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                placeholder={remaining > 0 ? String(remaining) : "Full amount"}
+                className={`${inputClass} font-mono`}
+              />
+            </Field>
+          </div>
           <ReceiptFileButton
             label={
-              contribution.receiptFileUrl
-                ? "Replace my receipt"
+              contribution.receipts.length > 0
+                ? "Add another receipt"
                 : "Upload my receipt"
             }
             busyLabel="Uploading…"
             busy={busy}
             onFile={(file) => void upload(file)}
           />
-        ) : null}
-        {contribution.receiptFileUrl ? (
-          <button
-            onClick={() => setViewing(true)}
-            aria-label="View my uploaded receipt"
-            className="rounded-lg border border-line px-2.5 py-1.5 font-mono text-xs font-bold text-green hover:border-green"
-          >
-            View my receipt 📎
-          </button>
-        ) : null}
-      </div>
-
-      {viewing && contribution.receiptFileUrl ? (
-        <ReceiptModal
-          path={contribution.receiptFileUrl}
-          title="My contribution receipt"
-          onClose={() => setViewing(false)}
-        />
+        </div>
       ) : null}
+
+      {contribution.receipts.length > 0 ? (
+        <div className="mt-4">
+          <p className="mb-1.5 font-mono text-[11px] font-bold uppercase tracking-wide text-ink/60">
+            My receipts this round
+          </p>
+          <ReceiptLedger receipts={contribution.receipts} />
+        </div>
+      ) : null}
+    </Card>
+  );
+}
+
+/**
+ * Full transparency: every member's receipts for this round, plus proof the
+ * collector was paid — all visible to the whole circle.
+ */
+function CircleReceipts() {
+  const { detail } = useMemberCircle();
+  const withReceipts = detail.members.filter((m) => m.receipts.length > 0);
+  const payout = detail.payout;
+
+  if (withReceipts.length === 0 && (!payout || payout.receipts.length === 0)) {
+    return null;
+  }
+
+  return (
+    <Card className="mt-6 px-5 py-5">
+      <h2 className="font-display text-lg font-bold">This round&apos;s receipts</h2>
+      <p className="mt-1 text-sm text-muted">
+        Everyone&apos;s proof of payment for round {detail.cycleIndex} — kept as a
+        shared record, including part-payments.
+      </p>
+
+      {payout && payout.receipts.length > 0 ? (
+        <div className="mt-4 rounded-xl border border-green/30 bg-green/5 p-4">
+          <p className="font-mono text-[11px] font-bold uppercase tracking-wide text-green-deep">
+            Payout to {payout.collectorName ?? "the collector"} ·{" "}
+            {formatNaira(payout.paidNaira)}
+            {payout.amountNaira > 0 ? ` of ${formatNaira(payout.amountNaira)}` : ""}
+          </p>
+          <div className="mt-2">
+            <ReceiptLedger receipts={payout.receipts} />
+          </div>
+        </div>
+      ) : null}
+
+      <div className="mt-4 space-y-4">
+        {withReceipts.map((m) => (
+          <div key={m.membershipId}>
+            <p className="mb-1.5 flex items-center justify-between gap-2 text-sm">
+              <span className="font-semibold">
+                {m.isMe ? `${m.name} (you)` : m.name}
+              </span>
+              <span className="font-mono text-xs text-muted">
+                {formatNaira(m.paidNaira)} of {formatNaira(detail.amountNaira)}
+              </span>
+            </p>
+            <ReceiptLedger receipts={m.receipts} />
+          </div>
+        ))}
+      </div>
     </Card>
   );
 }

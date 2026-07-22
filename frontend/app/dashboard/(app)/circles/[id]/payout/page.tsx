@@ -9,14 +9,13 @@ import {
   Card,
   EmptyState,
   ErrorNote,
+  Field,
   Modal,
   PageHeader,
+  inputClass,
 } from "@/components/admin/ui";
-import {
-  ReceiptFileButton,
-  ReceiptModal,
-  Stat,
-} from "@/components/dashboard/ui";
+import { ReceiptFileButton, Stat } from "@/components/dashboard/ui";
+import { ReceiptLedger } from "@/components/circles/ReceiptLedger";
 
 export default function PayoutPage() {
   const { detail, refresh } = useCircle();
@@ -24,7 +23,7 @@ export default function PayoutPage() {
 
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [viewingReceipt, setViewingReceipt] = useState(false);
+  const [amount, setAmount] = useState("");
   const [result, setResult] = useState<CompletePayoutResult | null>(null);
 
   if (!cycle) {
@@ -48,7 +47,9 @@ export default function PayoutPage() {
     setBusy(true);
     setError(null);
     try {
-      await coordinatorApi.uploadPayoutReceipt(circle.id, file);
+      const parsed = amount.trim() === "" ? undefined : Number(amount);
+      await coordinatorApi.uploadPayoutReceipt(circle.id, file, parsed);
+      setAmount("");
       await refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not upload receipt");
@@ -138,22 +139,40 @@ export default function PayoutPage() {
           </p>
         ) : null}
 
-        <div className="mt-4 flex flex-wrap items-center gap-3">
+        {payout && payout.paidNaira > 0 ? (
+          <p className="mt-3 text-sm text-ink/80">
+            Paid to {collector?.name ?? "the collector"} so far:{" "}
+            <span className="font-mono font-bold text-green">
+              {formatNaira(payout.paidNaira)}
+            </span>{" "}
+            of {formatNaira(cycle.potNaira)} pot
+          </p>
+        ) : null}
+
+        <div className="mt-4 flex flex-wrap items-end gap-3">
+          <div className="w-44">
+            <Field label="Amount sent (optional)">
+              <input
+                type="number"
+                inputMode="numeric"
+                min={1}
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                placeholder="Full pot"
+                className={`${inputClass} font-mono`}
+              />
+            </Field>
+          </div>
           <ReceiptFileButton
-            label={payout?.receiptFileUrl ? "Replace payout receipt" : "Upload payout receipt"}
+            label={
+              payout && payout.receipts.length > 0
+                ? "Add another receipt"
+                : "Upload payout receipt"
+            }
             busyLabel="Uploading…"
             busy={busy}
             onFile={(file) => void uploadReceipt(file)}
           />
-          {payout?.receiptFileUrl ? (
-            <button
-              onClick={() => setViewingReceipt(true)}
-              aria-label="View the uploaded payout receipt"
-              className="rounded-lg border border-line px-2.5 py-1.5 font-mono text-xs font-bold text-green hover:border-green"
-            >
-              View receipt 📎
-            </button>
-          ) : null}
           <div className="ml-auto">
             <Button
               onClick={() => void complete()}
@@ -163,21 +182,21 @@ export default function PayoutPage() {
             </Button>
           </div>
         </div>
-        {!payout?.receiptFileUrl ? (
+
+        {payout && payout.receipts.length > 0 ? (
+          <div className="mt-4">
+            <p className="mb-1.5 font-mono text-[11px] font-bold uppercase tracking-wide text-ink/60">
+              Payout receipts (visible to the whole circle)
+            </p>
+            <ReceiptLedger receipts={payout.receipts} />
+          </div>
+        ) : (
           <p className="mt-3 text-xs text-muted">
             Upload the receipt first — completing the payout closes round{" "}
             {cycle.index} and moves the circle to the next collector.
           </p>
-        ) : null}
+        )}
       </Card>
-
-      {viewingReceipt && payout?.receiptFileUrl ? (
-        <ReceiptModal
-          path={payout.receiptFileUrl}
-          title={`Payout receipt — round ${cycle.index}, ${collector?.name ?? ""}`}
-          onClose={() => setViewingReceipt(false)}
-        />
-      ) : null}
 
       {result ? (
         <Modal title="Payout recorded ✓" onClose={() => setResult(null)}>

@@ -43,12 +43,12 @@ export default function ProfileSettings({
   onSaved: (user: SafeUser) => void;
 }) {
   return (
-    <div>
+    <div className="mx-auto max-w-3xl">
       <PageHeader
         title="Settings"
         subtitle="Your details, shown to your circles. Keep them current."
       />
-      <div className="grid max-w-3xl gap-4">
+      <div className="grid gap-4">
         <ProfileForm user={user} api={api} onSaved={onSaved} />
         <WhatsAppForm user={user} api={api} onSaved={onSaved} />
         <PasswordForm api={api} />

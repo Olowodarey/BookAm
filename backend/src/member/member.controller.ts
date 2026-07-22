@@ -20,6 +20,7 @@ import {
   MAX_RECEIPT_BYTES,
   type ReceiptFile,
 } from '../circles/receipt-storage.service';
+import { parseAmountField } from '../circles/receipt-amount';
 import { CreateAppealDto, VoteDto } from '../circles/dto/appeal.dto';
 import { ApplyCollectorDto } from './dto/collector-application.dto';
 import { MemberService } from './member.service';
@@ -63,8 +64,14 @@ export class MemberController {
     @CurrentUser() user: SafeUser,
     @Param('circleId') circleId: string,
     @UploadedFile() file: ReceiptFile | undefined,
+    @Body('amount') amount?: string,
   ) {
-    return this.member.uploadMyReceipt(circleId, user.id, file);
+    return this.member.uploadMyReceipt(
+      circleId,
+      user.id,
+      file,
+      parseAmountField(amount),
+    );
   }
 
   // ---- Become a collector --------------------------------------------------

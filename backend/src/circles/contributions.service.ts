@@ -6,11 +6,12 @@ import {
 } from '@nestjs/common';
 import type { CircleFrequency } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { CirclesService } from './circles.service';
+import { CirclesService, contributionInclude } from './circles.service';
 import {
   ReceiptStorageService,
   type ReceiptFile,
 } from './receipt-storage.service';
+import { resolveReceiptAmount } from './receipt-amount';
 import type { ContributionInfo, ReminderInfo } from './circles.types';
 
 const FREQUENCY_LABEL: Record<CircleFrequency, string> = {
@@ -28,14 +29,18 @@ export class ContributionsService {
   ) {}
 
   /**
-   * Attach a proof-of-payment receipt to a member's contribution for the open
-   * cycle. Moves it to PENDING_REVIEW; the coordinator then verifies/rejects.
+   * Record one proof-of-payment toward a member's contribution for the open
+   * cycle — the coordinator logging a payment they received. Contributions can
+   * be paid bit by bit, so this appends to the receipt ledger; `amountNaira`
+   * defaults to the full contribution amount when omitted. Moves it to
+   * PENDING_REVIEW so the coordinator can then verify it PAID.
    */
   async attachReceipt(
     circleId: string,
     coordinatorId: string,
     contributionId: string,
     file: ReceiptFile | undefined,
+    amountNaira?: number,
   ): Promise<ContributionInfo> {
     const contribution = await this.ownedOpenContribution(
       circleId,
@@ -46,6 +51,15 @@ export class ContributionsService {
       throw new ConflictException('This contribution is already marked paid');
     }
     const receiptFileUrl = await this.storage.save(file, 'contribution');
+    const amount = resolveReceiptAmount(amountNaira, contribution.amountNaira);
+    await this.prisma.contributionReceipt.create({
+      data: {
+        contributionId,
+        amountNaira: amount,
+        receiptFileUrl,
+        uploadedById: coordinatorId,
+      },
+    });
     return this.updateAndMap(contributionId, {
       receiptFileUrl,
       status: 'PENDING_REVIEW',
@@ -180,7 +194,7 @@ export class ContributionsService {
     const updated = await this.prisma.contribution.update({
       where: { id: contributionId },
       data,
-      include: { membership: true, reviewedBy: true },
+      include: contributionInclude,
     });
     return this.circles.toContributionInfo(updated);
   }

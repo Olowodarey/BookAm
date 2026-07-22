@@ -4,18 +4,23 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import type { Circle, Contribution, Membership } from '@prisma/client';
+import type { Circle, Membership } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   CirclesService,
+  contributionInclude,
+  payoutInclude,
+  type ContributionWithRelations,
   type OpenCycleState,
 } from '../circles/circles.service';
 import {
   ReceiptStorageService,
   type ReceiptFile,
 } from '../circles/receipt-storage.service';
+import { resolveReceiptAmount } from '../circles/receipt-amount';
 import type {
   MemberCircleDetail,
+  MemberPayout,
   MemberRow,
   MyCircleCard,
   MyCollectorApplication,
@@ -135,9 +140,17 @@ export class MemberService {
         isMe: m.id === me.id,
         hasCollected: collected.has(m.id),
         status: c?.status ?? null,
+        paidNaira: c?.receipts.reduce((sum, r) => sum + r.amountNaira, 0) ?? 0,
         receiptFileUrl: c?.receiptFileUrl ?? null,
+        receipts: (c?.receipts ?? []).map((r) =>
+          this.circles.toReceiptRecord(r),
+        ),
       };
     });
+
+    const payout = state
+      ? await this.cyclePayout(state.cycle.id, state.collector?.name ?? null)
+      : null;
 
     const queue = members.filter((m) => !collected.has(m.id));
     const collectorId = state?.collector?.id ?? null;
@@ -175,6 +188,7 @@ export class MemberService {
         : null,
       upcoming,
       members: rows,
+      payout,
       potNaira: paidSum,
       expectedNaira: circle.contributionAmountNaira * members.length,
       me: {
@@ -196,6 +210,7 @@ export class MemberService {
     circleId: string,
     userId: string,
     file: ReceiptFile | undefined,
+    amountNaira?: number,
   ): Promise<MyContribution> {
     const me = await this.requireMembership(circleId, userId);
     const circle = await this.prisma.circle.findUniqueOrThrow({
@@ -222,6 +237,15 @@ export class MemberService {
       );
     }
     const receiptFileUrl = await this.storage.save(file, 'contribution');
+    const amount = resolveReceiptAmount(amountNaira, contribution.amountNaira);
+    await this.prisma.contributionReceipt.create({
+      data: {
+        contributionId: contribution.id,
+        amountNaira: amount,
+        receiptFileUrl,
+        uploadedById: userId,
+      },
+    });
     const updated = await this.prisma.contribution.update({
       where: { id: contribution.id },
       data: {
@@ -229,6 +253,7 @@ export class MemberService {
         status: 'PENDING_REVIEW',
         rejectionReason: null,
       },
+      include: contributionInclude,
     });
     return this.toMyContribution(updated, circle);
   }
@@ -312,21 +337,49 @@ export class MemberService {
   }
 
   private toMyContribution(
-    contribution: Contribution | null,
+    contribution: ContributionWithRelations | null,
     circle: Circle,
   ): MyContribution {
     return {
       contributionId: contribution?.id ?? null,
       status: contribution?.status ?? null,
       amountNaira: contribution?.amountNaira ?? circle.contributionAmountNaira,
+      paidNaira:
+        contribution?.receipts.reduce((sum, r) => sum + r.amountNaira, 0) ?? 0,
       receiptFileUrl: contribution?.receiptFileUrl ?? null,
+      receipts: (contribution?.receipts ?? []).map((r) =>
+        this.circles.toReceiptRecord(r),
+      ),
       rejectionReason: contribution?.rejectionReason ?? null,
     };
   }
 
-  private cycleContributions(cycleId: string): Promise<Contribution[]> {
+  private cycleContributions(
+    cycleId: string,
+  ): Promise<ContributionWithRelations[]> {
     return this.prisma.contribution.findMany({
       where: { cycleId, membership: { status: 'ACTIVE' } },
+      include: contributionInclude,
     });
+  }
+
+  /** This cycle's payout with its receipt ledger — visible to every member. */
+  private async cyclePayout(
+    cycleId: string,
+    collectorName: string | null,
+  ): Promise<MemberPayout | null> {
+    const payout = await this.prisma.payout.findUnique({
+      where: { cycleId },
+      include: payoutInclude,
+    });
+    if (!payout) return null;
+    return {
+      status: payout.status,
+      amountNaira: payout.amountNaira,
+      paidNaira: payout.receipts.reduce((sum, r) => sum + r.amountNaira, 0),
+      collectorName,
+      receipts: payout.receipts.map((r) => this.circles.toReceiptRecord(r)),
+      completedAt: payout.completedAt,
+    };
   }
 }

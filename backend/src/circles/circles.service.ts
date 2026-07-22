@@ -1,12 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import type {
-  Circle,
-  Contribution,
-  Cycle,
-  Membership,
-  Payout,
-  User,
-} from '@prisma/client';
+import { Prisma } from '@prisma/client';
+import type { Circle, Cycle, Membership } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import type { CreateCircleDto } from './dto/circle.dto';
 import type {
@@ -17,7 +11,33 @@ import type {
   MemberInfo,
   PayoutAccount,
   PayoutInfo,
+  ReceiptRecord,
 } from './circles.types';
+
+/** Include the uploader's name on each receipt, oldest first. */
+const receiptsInclude = {
+  include: { uploadedBy: { select: { name: true } } },
+  orderBy: { createdAt: 'asc' },
+} as const;
+
+/** Everything toContributionInfo needs — reuse on every contribution fetch. */
+export const contributionInclude = {
+  membership: true,
+  reviewedBy: true,
+  receipts: receiptsInclude,
+} satisfies Prisma.ContributionInclude;
+
+/** Everything toPayoutInfo needs. */
+export const payoutInclude = {
+  receipts: receiptsInclude,
+} satisfies Prisma.PayoutInclude;
+
+export type ContributionWithRelations = Prisma.ContributionGetPayload<{
+  include: typeof contributionInclude;
+}>;
+export type PayoutWithReceipts = Prisma.PayoutGetPayload<{
+  include: typeof payoutInclude;
+}>;
 
 /**
  * The hydrated "what's happening right now" view of a circle's open cycle.
@@ -166,13 +186,14 @@ export class CirclesService {
     if (state) {
       const rows = await this.prisma.contribution.findMany({
         where: { cycleId: state.cycle.id, membership: { status: 'ACTIVE' } },
-        include: { membership: true, reviewedBy: true },
+        include: contributionInclude,
       });
       rows.sort((a, b) => a.membership.position - b.membership.position);
       paidCount = rows.filter((r) => r.status === 'PAID').length;
       owingCount = rows.length - paidCount;
       const payout = await this.prisma.payout.findUnique({
         where: { cycleId: state.cycle.id },
+        include: payoutInclude,
       });
       cycleInfo = {
         id: state.cycle.id,
@@ -275,9 +296,25 @@ export class CirclesService {
     };
   }
 
-  toContributionInfo(
-    c: Contribution & { membership: Membership; reviewedBy: User | null },
-  ): ContributionInfo {
+  toReceiptRecord(r: {
+    id: string;
+    amountNaira: number;
+    receiptFileUrl: string;
+    note: string | null;
+    createdAt: Date;
+    uploadedBy: { name: string } | null;
+  }): ReceiptRecord {
+    return {
+      id: r.id,
+      amountNaira: r.amountNaira,
+      receiptFileUrl: r.receiptFileUrl,
+      uploadedByName: r.uploadedBy?.name ?? null,
+      note: r.note,
+      createdAt: r.createdAt,
+    };
+  }
+
+  toContributionInfo(c: ContributionWithRelations): ContributionInfo {
     return {
       id: c.id,
       membershipId: c.membershipId,
@@ -286,7 +323,9 @@ export class CirclesService {
       position: c.membership.position,
       amountNaira: c.amountNaira,
       status: c.status,
+      paidNaira: c.receipts.reduce((sum, r) => sum + r.amountNaira, 0),
       receiptFileUrl: c.receiptFileUrl,
+      receipts: c.receipts.map((r) => this.toReceiptRecord(r)),
       rejectionReason: c.rejectionReason,
       reviewedByName: c.reviewedBy?.name ?? null,
       reviewedAt: c.reviewedAt,
@@ -294,12 +333,14 @@ export class CirclesService {
     };
   }
 
-  toPayoutInfo(p: Payout): PayoutInfo {
+  toPayoutInfo(p: PayoutWithReceipts): PayoutInfo {
     return {
       id: p.id,
       status: p.status,
       amountNaira: p.amountNaira,
+      paidNaira: p.receipts.reduce((sum, r) => sum + r.amountNaira, 0),
       receiptFileUrl: p.receiptFileUrl,
+      receipts: p.receipts.map((r) => this.toReceiptRecord(r)),
       completedAt: p.completedAt,
     };
   }

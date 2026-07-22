@@ -20,6 +20,7 @@ import { ContributionsService } from './contributions.service';
 import { PayoutsService } from './payouts.service';
 import { AppealsService } from './appeals.service';
 import { MAX_RECEIPT_BYTES, type ReceiptFile } from './receipt-storage.service';
+import { parseAmountField } from './receipt-amount';
 import { CreateCircleDto } from './dto/circle.dto';
 import { AddMemberDto, ReorderMembersDto } from './dto/member.dto';
 import { RejectContributionDto } from './dto/contribution.dto';
@@ -112,8 +113,15 @@ export class CirclesController {
     @Param('id') id: string,
     @Param('contributionId') contributionId: string,
     @UploadedFile() file: ReceiptFile | undefined,
+    @Body('amount') amount?: string,
   ) {
-    return this.contributions.attachReceipt(id, user.id, contributionId, file);
+    return this.contributions.attachReceipt(
+      id,
+      user.id,
+      contributionId,
+      file,
+      parseAmountField(amount),
+    );
   }
 
   @Post(':id/contributions/:contributionId/verify')
@@ -143,8 +151,14 @@ export class CirclesController {
     @CurrentUser() user: SafeUser,
     @Param('id') id: string,
     @UploadedFile() file: ReceiptFile | undefined,
+    @Body('amount') amount?: string,
   ) {
-    return this.payouts.attachReceipt(id, user.id, file);
+    return this.payouts.attachReceipt(
+      id,
+      user.id,
+      file,
+      parseAmountField(amount),
+    );
   }
 
   @Post(':id/payout/complete')

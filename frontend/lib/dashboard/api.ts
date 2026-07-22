@@ -97,10 +97,11 @@ function request<T>(
 }
 
 /** Multipart upload — the browser sets the Content-Type boundary itself. */
-function upload<T>(path: string, file: File): Promise<T> {
+function upload<T>(path: string, file: File, amountNaira?: number): Promise<T> {
   const token = getToken();
   const body = new FormData();
   body.append("file", file);
+  if (amountNaira !== undefined) body.append("amount", String(amountNaira));
   return send<T>(path, {
     method: "POST",
     headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -176,10 +177,12 @@ export const coordinatorApi = {
     circleId: string,
     contributionId: string,
     file: File,
+    amountNaira?: number,
   ) =>
     upload<ContributionInfo>(
       `/circles/${circleId}/contributions/${contributionId}/receipt`,
       file,
+      amountNaira,
     ),
   verifyContribution: (circleId: string, contributionId: string) =>
     request<ContributionInfo>(
@@ -196,9 +199,14 @@ export const coordinatorApi = {
       { method: "POST", body: { reason } },
     ),
 
-  // Payout
-  uploadPayoutReceipt: (circleId: string, file: File) =>
-    upload<PayoutInfo>(`/circles/${circleId}/payout/receipt`, file),
+  // Payout — amountNaira records a part-payment when paying the collector
+  // bit by bit; omit it to record the full pot.
+  uploadPayoutReceipt: (circleId: string, file: File, amountNaira?: number) =>
+    upload<PayoutInfo>(
+      `/circles/${circleId}/payout/receipt`,
+      file,
+      amountNaira,
+    ),
   completePayout: (circleId: string) =>
     request<CompletePayoutResult>(`/circles/${circleId}/payout/complete`, {
       method: "POST",

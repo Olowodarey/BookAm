@@ -16,6 +16,7 @@ export type {
   CircleStatus,
   ContributionStatus,
   PayoutAccount,
+  PayoutStatus,
 } from "../dashboard/types";
 import type { PayoutAccount } from "../dashboard/types";
 
@@ -23,6 +24,7 @@ import type {
   CircleFrequency,
   CircleStatus,
   ContributionStatus,
+  PayoutStatus,
 } from "../dashboard/types";
 
 export type AppealStatus = "OPEN" | "APPROVED" | "REJECTED" | "WITHDRAWN";
@@ -63,6 +65,16 @@ export interface MyCircleCard {
   openAppeals: number;
 }
 
+/** One installment paid toward a contribution/payout, visible to everyone. */
+export interface MemberReceipt {
+  id: string;
+  amountNaira: number;
+  receiptFileUrl: string;
+  uploadedByName: string | null;
+  note: string | null;
+  createdAt: string;
+}
+
 /** A fellow member's row — no phone numbers, just the shared record. */
 export interface MemberRow {
   membershipId: string;
@@ -71,8 +83,12 @@ export interface MemberRow {
   isMe: boolean;
   hasCollected: boolean;
   status: ContributionStatus | null;
-  /** Uploaded receipts are visible to the whole circle (transparency). */
+  /** Paid so far this cycle (sum of their installment receipts). */
+  paidNaira: number;
+  /** Latest receipt image (mirror of the newest in `receipts`). */
   receiptFileUrl: string | null;
+  /** Everyone's receipts for the week — visible to the whole circle. */
+  receipts: MemberReceipt[];
 }
 
 export interface RotationSlot {
@@ -85,8 +101,20 @@ export interface MyContribution {
   contributionId: string | null;
   status: ContributionStatus | null;
   amountNaira: number;
+  paidNaira: number;
   receiptFileUrl: string | null;
+  receipts: MemberReceipt[];
   rejectionReason: string | null;
+}
+
+/** The current cycle's payout, shown to every member for transparency. */
+export interface MemberPayout {
+  status: PayoutStatus;
+  amountNaira: number;
+  paidNaira: number;
+  collectorName: string | null;
+  receipts: MemberReceipt[];
+  completedAt: string | null;
 }
 
 export interface MemberCircleDetail {
@@ -104,6 +132,8 @@ export interface MemberCircleDetail {
   /** Who collects after the current turn, in order (excludes the collector). */
   upcoming: RotationSlot[];
   members: MemberRow[];
+  /** This cycle's payout (proof the collector was paid), or null if none yet. */
+  payout: MemberPayout | null;
   potNaira: number;
   expectedNaira: number;
   me: {

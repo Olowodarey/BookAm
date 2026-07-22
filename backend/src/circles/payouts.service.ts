@@ -1,10 +1,15 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { CirclesService, type OpenCycleState } from './circles.service';
+import {
+  CirclesService,
+  payoutInclude,
+  type OpenCycleState,
+} from './circles.service';
 import {
   ReceiptStorageService,
   type ReceiptFile,
 } from './receipt-storage.service';
+import { resolveReceiptAmount } from './receipt-amount';
 import type { CompletePayoutResult, PayoutInfo } from './circles.types';
 
 @Injectable()
@@ -23,10 +28,12 @@ export class PayoutsService {
     circleId: string,
     coordinatorId: string,
     file: ReceiptFile | undefined,
+    amountNaira?: number,
   ): Promise<PayoutInfo> {
     const state = await this.openStateWithCollector(circleId, coordinatorId);
     const receiptFileUrl = await this.storage.save(file, 'payout');
     const pot = await this.circles.potNaira(state.cycle.id);
+    const amount = resolveReceiptAmount(amountNaira, pot);
     const payout = await this.prisma.payout.upsert({
       where: { cycleId: state.cycle.id },
       create: {
@@ -37,7 +44,19 @@ export class PayoutsService {
       },
       update: { receiptFileUrl, collectorId: state.collector!.id },
     });
-    return this.circles.toPayoutInfo(payout);
+    await this.prisma.payoutReceipt.create({
+      data: {
+        payoutId: payout.id,
+        amountNaira: amount,
+        receiptFileUrl,
+        uploadedById: coordinatorId,
+      },
+    });
+    const withReceipts = await this.prisma.payout.findUniqueOrThrow({
+      where: { id: payout.id },
+      include: payoutInclude,
+    });
+    return this.circles.toPayoutInfo(withReceipts);
   }
 
   /**
@@ -76,6 +95,7 @@ export class PayoutsService {
           amountNaira: pot,
           collectorId: collector.id,
         },
+        include: payoutInclude,
       });
       await tx.cycle.update({
         where: { id: state.cycle.id },

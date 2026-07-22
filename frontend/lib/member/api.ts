@@ -92,10 +92,11 @@ function request<T>(
 }
 
 /** Multipart upload — the browser sets the Content-Type boundary itself. */
-function upload<T>(path: string, file: File): Promise<T> {
+function upload<T>(path: string, file: File, amountNaira?: number): Promise<T> {
   const token = getToken();
   const body = new FormData();
   body.append("file", file);
+  if (amountNaira !== undefined) body.append("amount", String(amountNaira));
   return send<T>(path, {
     method: "POST",
     headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -140,9 +141,14 @@ export const memberApi = {
   circleDetail: (circleId: string) =>
     request<MemberCircleDetail>(`/member/circles/${circleId}`),
 
-  // My one write action: my own receipt for the open round
-  uploadMyReceipt: (circleId: string, file: File) =>
-    upload<MyContribution>(`/member/circles/${circleId}/receipt`, file),
+  // My one write action: my own receipt for the open round. amountNaira lets
+  // me record a part-payment (bit by bit); omit it to pay the full amount.
+  uploadMyReceipt: (circleId: string, file: File, amountNaira?: number) =>
+    upload<MyContribution>(
+      `/member/circles/${circleId}/receipt`,
+      file,
+      amountNaira,
+    ),
 
   // Become a collector (reviewed by the platform admin)
   myCollectorApplication: () =>

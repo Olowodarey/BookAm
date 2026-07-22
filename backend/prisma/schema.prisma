@@ -118,6 +118,8 @@ model User {
   memberships           Membership[]           @relation("MemberUser")
   reviewedContributions Contribution[]         @relation("ContributionReviewer")
   decidedAppeals        Appeal[]               @relation("AppealDecider")
+  contributionReceipts  ContributionReceipt[]  @relation("ContributionReceiptUploader")
+  payoutReceipts        PayoutReceipt[]        @relation("PayoutReceiptUploader")
 }
 
 model CollectorApplication {
@@ -260,6 +262,10 @@ model Contribution {
   createdAt       DateTime           @default(now())
   updatedAt       DateTime           @updatedAt
 
+  // Installment ledger — a contribution may be paid bit by bit, each part with
+  // its own receipt. receiptFileUrl above mirrors the latest one for display.
+  receipts        ContributionReceipt[]
+
   @@unique([membershipId, cycleId])
   @@index([cycleId, status])
 }
@@ -275,12 +281,51 @@ model Payout {
   amountNaira    Int
   status         PayoutStatus @default(PENDING)
   // Proof the coordinator sent the pot to the collector (outside BookAm).
+  // Mirrors the latest receipt below for display; the full ledger is `receipts`.
   receiptFileUrl String?
   completedAt    DateTime?
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
+  // A payout may also be sent bit by bit, each part with its own receipt.
+  receipts       PayoutReceipt[]
+
   @@index([collectorId])
+}
+
+/**
+ * One proof-of-payment toward a contribution. Contributions can be paid in
+ * installments, so each part is recorded here with its amount and receipt.
+ * Records only — BookAm never holds or moves the money.
+ */
+model ContributionReceipt {
+  id             String       @id @default(cuid())
+  contribution   Contribution @relation(fields: [contributionId], references: [id], onDelete: Cascade)
+  contributionId String
+  amountNaira    Int
+  receiptFileUrl String
+  // Who uploaded it (the member themselves, or the coordinator on their behalf).
+  uploadedBy     User?        @relation("ContributionReceiptUploader", fields: [uploadedById], references: [id])
+  uploadedById   String?
+  note           String?
+  createdAt      DateTime     @default(now())
+
+  @@index([contributionId])
+}
+
+/** One proof-of-payment toward a payout (the coordinator paying the collector). */
+model PayoutReceipt {
+  id             String   @id @default(cuid())
+  payout         Payout   @relation(fields: [payoutId], references: [id], onDelete: Cascade)
+  payoutId       String
+  amountNaira    Int
+  receiptFileUrl String
+  uploadedBy     User?    @relation("PayoutReceiptUploader", fields: [uploadedById], references: [id])
+  uploadedById   String?
+  note           String?
+  createdAt      DateTime @default(now())
+
+  @@index([payoutId])
 }
 
 // One-time codes for phone verification. Codes are stored hashed and the

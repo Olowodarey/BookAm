@@ -2,6 +2,7 @@ import { BadRequestException, HttpException, Injectable } from '@nestjs/common';
 import { randomInt } from 'crypto';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service';
+import { WhatsAppService } from './whatsapp.service';
 
 const CODE_TTL_MS = 10 * 60 * 1000;
 const RESEND_COOLDOWN_MS = 60 * 1000;
@@ -20,7 +21,10 @@ export interface OtpSendResult {
  */
 @Injectable()
 export class OtpService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly whatsapp: WhatsAppService,
+  ) {}
 
   async send(phone: string): Promise<OtpSendResult> {
     const latest = await this.prisma.phoneOtp.findFirst({
@@ -46,7 +50,7 @@ export class OtpService {
       },
     });
 
-    this.deliver(phone, code);
+    await this.whatsapp.sendCode(phone, code);
     return {
       resendAfterSeconds: RESEND_COOLDOWN_MS / 1000,
       ...(process.env.NODE_ENV !== 'production' ? { devCode: code } : {}),
@@ -81,16 +85,5 @@ export class OtpService {
       where: { id: otp.id },
       data: { consumedAt: new Date() },
     });
-  }
-
-  /**
-   * Delivery adapter.
-   * // TODO: WhatsApp/SMS integration — send `code` to `phone` via the
-   * // WhatsApp Business API or a provider like Termii / Africa's Talking,
-   * // then stop returning devCode above. Until then the code is logged here
-   * // and surfaced in dev responses.
-   */
-  private deliver(phone: string, code: string): void {
-    console.log(`[otp] Verification code for ${phone}: ${code}`);
   }
 }

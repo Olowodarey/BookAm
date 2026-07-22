@@ -4,6 +4,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { OtpService } from './otp.service';
+import { WhatsAppService } from './whatsapp.service';
 import { EmailService } from './email.service';
 import { EmailOtpService } from './email-otp.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
@@ -25,6 +26,7 @@ import { RolesGuard } from './roles';
   providers: [
     AuthService,
     OtpService,
+    WhatsAppService,
     EmailService,
     EmailOtpService,
     JwtAuthGuard,

@@ -46,6 +46,16 @@ export interface MemberInfo {
   hasCollected: boolean;
 }
 
+/** One installment paid toward a contribution or payout, with its receipt. */
+export interface ReceiptRecord {
+  id: string;
+  amountNaira: number;
+  receiptFileUrl: string;
+  uploadedByName: string | null;
+  note: string | null;
+  createdAt: Date;
+}
+
 export interface ContributionInfo {
   id: string;
   membershipId: string;
@@ -54,7 +64,12 @@ export interface ContributionInfo {
   position: number;
   amountNaira: number;
   status: ContributionStatus;
+  /** Sum of installment receipts so far (may be < amountNaira until fully paid). */
+  paidNaira: number;
+  /** Latest receipt (mirror of the newest entry in `receipts`). */
   receiptFileUrl: string | null;
+  /** Full installment ledger, oldest first — visible to the whole circle. */
+  receipts: ReceiptRecord[];
   rejectionReason: string | null;
   reviewedByName: string | null;
   reviewedAt: Date | null;
@@ -77,7 +92,12 @@ export interface PayoutInfo {
   status: PayoutStatus;
   /** Computed pot (sum of PAID contributions) — a figure, not a balance. */
   amountNaira: number;
+  /** Sum of installment receipts sent to the collector so far. */
+  paidNaira: number;
+  /** Latest receipt (mirror of the newest entry in `receipts`). */
   receiptFileUrl: string | null;
+  /** Full installment ledger, oldest first — visible to the whole circle. */
+  receipts: ReceiptRecord[];
   completedAt: Date | null;
 }
 
