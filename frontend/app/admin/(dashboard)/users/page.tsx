@@ -123,7 +123,7 @@ export default function UsersPage() {
             <thead>
               <tr className="border-b border-line font-mono text-[11px] uppercase tracking-wide text-ink/60">
                 <th scope="col" className="px-5 py-3 font-bold">Name</th>
-                <th scope="col" className="px-5 py-3 font-bold">Phone</th>
+                <th scope="col" className="px-5 py-3 font-bold">Email</th>
                 <th scope="col" className="px-5 py-3 font-bold">Role</th>
                 <th scope="col" className="px-5 py-3 font-bold">Status</th>
                 <th scope="col" className="px-5 py-3 font-bold">Joined</th>
@@ -140,7 +140,7 @@ export default function UsersPage() {
                 >
                   <td className="px-5 py-3.5 font-semibold">{user.name}</td>
                   <td className="px-5 py-3.5 font-mono text-xs">
-                    {user.phone}
+                    {user.email}
                   </td>
                   <td className="px-5 py-3.5">
                     <StatusBadge status={user.role} />
@@ -246,13 +246,13 @@ function ConfirmStatusModal({
         {suspending ? (
           <>
             <span className="font-semibold">{user.name}</span> (
-            <span className="font-mono text-xs">{user.phone}</span>) will not
+            <span className="font-mono text-xs">{user.email}</span>) will not
             be able to sign in until reactivated. Their records stay intact.
           </>
         ) : (
           <>
             <span className="font-semibold">{user.name}</span> (
-            <span className="font-mono text-xs">{user.phone}</span>) will be
+            <span className="font-mono text-xs">{user.email}</span>) will be
             able to sign in again.
           </>
         )}

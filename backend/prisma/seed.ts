@@ -9,20 +9,23 @@ const daysFromNow = (days: number) =>
   new Date(Date.now() + days * 24 * 60 * 60 * 1000);
 
 async function main() {
+  const adminEmail = process.env.SEED_ADMIN_EMAIL ?? 'admin@bookam.test';
   const adminPhone = process.env.SEED_ADMIN_PHONE ?? '+2348000000001';
   const adminPassword = process.env.SEED_ADMIN_PASSWORD ?? 'admin1234';
 
   const admin = await prisma.user.upsert({
-    where: { phone: adminPhone },
+    where: { email: adminEmail },
     update: { role: 'ADMIN' },
     create: {
+      email: adminEmail,
       phone: adminPhone,
       name: 'BookAm Admin',
       role: 'ADMIN',
+      emailVerifiedAt: new Date(),
       passwordHash: await bcrypt.hash(adminPassword, 10),
     },
   });
-  console.log(`Admin ready: ${admin.phone} (password: ${adminPassword})`);
+  console.log(`Admin ready: ${admin.email} (password: ${adminPassword})`);
 
   const starter = await prisma.subscriptionPlan.upsert({
     where: { name: 'Starter' },
@@ -54,7 +57,11 @@ async function main() {
       priceNaira: 25000,
       interval: 'YEARLY',
       maxCircles: null,
-      features: ['Unlimited circles', 'Multiple coordinators', 'Priority support'],
+      features: [
+        'Unlimited circles',
+        'Multiple coordinators',
+        'Priority support',
+      ],
     },
   });
 
@@ -67,12 +74,42 @@ async function main() {
   const memberHash = await bcrypt.hash(memberPassword, 10);
 
   const demoUsers = [
-    { phone: '+2348011111111', name: 'Iya Basira', role: 'COORDINATOR' },
-    { phone: '+2348022222222', name: 'Chinedu Okafor', role: 'COORDINATOR' },
-    { phone: '+2348033333333', name: 'Amina Yusuf', role: 'MEMBER' },
-    { phone: '+2348044444444', name: 'Tunde Adebayo', role: 'MEMBER' },
-    { phone: '+2348055555555', name: 'Ngozi Eze', role: 'MEMBER' },
-    { phone: '+2348066666666', name: 'Musa Ibrahim', role: 'MEMBER' },
+    {
+      phone: '+2348011111111',
+      email: 'iya.basira@bookam.test',
+      name: 'Iya Basira',
+      role: 'COORDINATOR',
+    },
+    {
+      phone: '+2348022222222',
+      email: 'chinedu.okafor@bookam.test',
+      name: 'Chinedu Okafor',
+      role: 'COORDINATOR',
+    },
+    {
+      phone: '+2348033333333',
+      email: 'amina.yusuf@bookam.test',
+      name: 'Amina Yusuf',
+      role: 'MEMBER',
+    },
+    {
+      phone: '+2348044444444',
+      email: 'tunde.adebayo@bookam.test',
+      name: 'Tunde Adebayo',
+      role: 'MEMBER',
+    },
+    {
+      phone: '+2348055555555',
+      email: 'ngozi.eze@bookam.test',
+      name: 'Ngozi Eze',
+      role: 'MEMBER',
+    },
+    {
+      phone: '+2348066666666',
+      email: 'musa.ibrahim@bookam.test',
+      name: 'Musa Ibrahim',
+      role: 'MEMBER',
+    },
   ] as const;
 
   const users: Record<string, { id: string }> = {};
@@ -80,16 +117,23 @@ async function main() {
     const passwordHash =
       u.role === 'COORDINATOR' ? coordinatorHash : memberHash;
     users[u.phone] = await prisma.user.upsert({
-      where: { phone: u.phone },
+      where: { email: u.email },
       update: { passwordHash },
-      create: { phone: u.phone, name: u.name, role: u.role, passwordHash },
+      create: {
+        email: u.email,
+        phone: u.phone,
+        name: u.name,
+        role: u.role,
+        passwordHash,
+        emailVerifiedAt: new Date(),
+      },
     });
   }
   console.log(
-    `Coordinator ready: +2348011111111 (password: ${coordinatorPassword})`,
+    `Coordinator ready: iya.basira@bookam.test (password: ${coordinatorPassword})`,
   );
   console.log(
-    `Member ready: +2348033333333 (password: ${memberPassword})`,
+    `Member ready: amina.yusuf@bookam.test (password: ${memberPassword})`,
   );
 
   if ((await prisma.collectorApplication.count()) === 0) {
@@ -266,35 +310,43 @@ async function main() {
   // (separate from the shared demo users above) so each dashboard can be
   // tried with a distinct login: a collector who owns a fresh circle, and a
   // contributor who belongs to it.
+  const testCollectorEmail =
+    process.env.SEED_TEST_COLLECTOR_EMAIL ?? 'baba.kazeem@bookam.test';
   const testCollectorPhone =
     process.env.SEED_TEST_COLLECTOR_PHONE ?? '+2348090000001';
   const testCollectorPassword =
     process.env.SEED_TEST_COLLECTOR_PASSWORD ?? 'collector5678';
+  const testMemberEmail =
+    process.env.SEED_TEST_MEMBER_EMAIL ?? 'chika.obi@bookam.test';
   const testMemberPhone =
     process.env.SEED_TEST_MEMBER_PHONE ?? '+2348090000002';
   const testMemberPassword =
     process.env.SEED_TEST_MEMBER_PASSWORD ?? 'contributor5678';
 
   const testCollector = await prisma.user.upsert({
-    where: { phone: testCollectorPhone },
+    where: { email: testCollectorEmail },
     update: {
       role: 'COORDINATOR',
       passwordHash: await bcrypt.hash(testCollectorPassword, 10),
     },
     create: {
+      email: testCollectorEmail,
       phone: testCollectorPhone,
       name: 'Baba Kazeem',
       role: 'COORDINATOR',
+      emailVerifiedAt: new Date(),
       passwordHash: await bcrypt.hash(testCollectorPassword, 10),
     },
   });
   const testMember = await prisma.user.upsert({
-    where: { phone: testMemberPhone },
+    where: { email: testMemberEmail },
     update: { passwordHash: await bcrypt.hash(testMemberPassword, 10) },
     create: {
+      email: testMemberEmail,
       phone: testMemberPhone,
       name: 'Chika Obi',
       role: 'MEMBER',
+      emailVerifiedAt: new Date(),
       passwordHash: await bcrypt.hash(testMemberPassword, 10),
     },
   });
@@ -307,10 +359,10 @@ async function main() {
     },
   });
   console.log(
-    `Test collector ready: ${testCollector.phone} (password: ${testCollectorPassword})`,
+    `Test collector ready: ${testCollector.email} (password: ${testCollectorPassword})`,
   );
   console.log(
-    `Test contributor ready: ${testMember.phone} (password: ${testMemberPassword})`,
+    `Test contributor ready: ${testMember.email} (password: ${testMemberPassword})`,
   );
 
   // Give the test collector a fresh circle with the test contributor in it,
@@ -401,10 +453,14 @@ async function main() {
     }
   }
 
-  // Seeded accounts skip OTP — mark every user's phone as verified so the
-  // demo/test logins work without a code.
+  // Seeded accounts skip verification — mark every user's email (and phone,
+  // where set) as verified so the demo/test logins work without a code.
   await prisma.user.updateMany({
-    where: { phoneVerifiedAt: null },
+    where: { emailVerifiedAt: null },
+    data: { emailVerifiedAt: new Date() },
+  });
+  await prisma.user.updateMany({
+    where: { phone: { not: null }, phoneVerifiedAt: null },
     data: { phoneVerifiedAt: new Date() },
   });
 

@@ -3,26 +3,23 @@
 import { useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import {
-  authApi,
-  homeFor,
-  storeSession,
-} from "@/lib/auth/api";
+import { authApi, homeFor, storeSession } from "@/lib/auth/api";
 import AuthShell from "@/components/auth/AuthShell";
 import { Button, ErrorNote, Field, inputClass } from "@/components/admin/ui";
 
 type Step =
-  | { kind: "phone" }
-  | { kind: "reset"; phone: string; devCode?: string; resendAfter: number };
+  | { kind: "email" }
+  | { kind: "reset"; email: string; devCode?: string; resendAfter: number };
 
 /**
- * Forgot password: the OTP that proves phone ownership also authorizes the
- * new password — and signs the user straight in afterwards.
+ * Forgot password: the emailed code that proves email ownership also
+ * authorizes the new password — and signs the user straight in afterwards.
+ * (It's also how a Google-only user adds a password to their account.)
  */
 export default function ForgotPasswordPage() {
   const router = useRouter();
-  const [step, setStep] = useState<Step>({ kind: "phone" });
-  const [phone, setPhone] = useState("");
+  const [step, setStep] = useState<Step>({ kind: "email" });
+  const [email, setEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -31,10 +28,10 @@ export default function ForgotPasswordPage() {
     setError(null);
     setSubmitting(true);
     try {
-      const sent = await authApi.forgotPassword(phone);
+      const sent = await authApi.forgotPassword(email);
       setStep({
         kind: "reset",
-        phone: sent.phone,
+        email,
         devCode: sent.devCode,
         resendAfter: sent.resendAfterSeconds,
       });
@@ -60,24 +57,24 @@ export default function ForgotPasswordPage() {
         </>
       }
     >
-      {step.kind === "phone" ? (
+      {step.kind === "email" ? (
         <form onSubmit={(e) => void requestCode(e)} className="space-y-4">
           <h1 className="font-display text-lg font-bold">
             Forgot your password?
           </h1>
           <p className="text-sm text-muted">
-            No wahala. Enter your phone number and we&apos;ll send a code so
-            you can set a new one.
+            No wahala. Enter your email and we&apos;ll send a code so you can
+            set a new one.
           </p>
           {error ? <ErrorNote message={error} /> : null}
-          <Field label="Phone number">
+          <Field label="Email address">
             <input
-              type="tel"
+              type="email"
               required
               autoComplete="username"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              placeholder="+2348012345678"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@example.com"
               className={inputClass}
             />
           </Field>
@@ -87,7 +84,7 @@ export default function ForgotPasswordPage() {
         </form>
       ) : (
         <ResetStep
-          phone={step.phone}
+          email={step.email}
           initialDevCode={step.devCode}
           resendAfter={step.resendAfter}
           onDone={(role) => router.replace(homeFor(role))}
@@ -98,12 +95,12 @@ export default function ForgotPasswordPage() {
 }
 
 function ResetStep({
-  phone,
+  email,
   initialDevCode,
   resendAfter,
   onDone,
 }: {
-  phone: string;
+  email: string;
   initialDevCode?: string;
   resendAfter: number;
   onDone: (role: "MEMBER" | "COORDINATOR" | "ADMIN") => void;
@@ -126,7 +123,7 @@ function ResetStep({
     setError(null);
     setSubmitting(true);
     try {
-      const session = await authApi.resetPassword(phone, code, password);
+      const session = await authApi.resetPassword(email, code, password);
       storeSession(session);
       onDone(session.user.role);
     } catch (err) {
@@ -138,7 +135,7 @@ function ResetStep({
   const resend = async () => {
     setError(null);
     try {
-      const sent = await authApi.forgotPassword(phone);
+      const sent = await authApi.forgotPassword(email);
       setDevCode(sent.devCode);
       setCooldown(sent.resendAfterSeconds);
     } catch (err) {
@@ -151,7 +148,7 @@ function ResetStep({
       <h1 className="font-display text-lg font-bold">Set a new password</h1>
       <p className="text-sm text-ink/80">
         We sent a 6-digit code to{" "}
-        <span className="font-mono font-bold">{phone}</span>.
+        <span className="font-mono font-bold">{email}</span>.
       </p>
 
       {devCode ? (

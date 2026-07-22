@@ -64,12 +64,13 @@ export default function SubscriptionsPage() {
     }
   }, [statusFilter, page]);
 
+  // Load plans + subscriptions together; re-runs when the filter/page change
+  // (loadSubs' identity depends on them). setState happens after the awaits.
   useEffect(() => {
-    void loadPlans();
-  }, [loadPlans]);
-  useEffect(() => {
-    void loadSubs();
-  }, [loadSubs]);
+    void (async () => {
+      await Promise.all([loadPlans(), loadSubs()]);
+    })();
+  }, [loadPlans, loadSubs]);
 
   const activeRevenue = useMemo(
     () =>
@@ -308,7 +309,7 @@ function SubscriptionRow({
       <td className="px-5 py-3.5">
         <span className="font-semibold">{subscription.user.name}</span>
         <span className="ml-2 font-mono text-xs text-muted">
-          {subscription.user.phone}
+          {subscription.user.email}
         </span>
       </td>
       <td className="px-5 py-3.5">{subscription.plan.name}</td>

@@ -6,21 +6,17 @@ import type { LoginResponse } from "@/lib/auth/api";
 import { Button, ErrorNote, Field, inputClass } from "@/components/admin/ui";
 
 /**
- * The "enter the 6-digit code" step shared by registration, unverified
- * login, and Google phone-linking. In dev builds the backend returns the
- * code (devCode) so the flow is testable before the WhatsApp/SMS provider
- * is wired up.
+ * The "enter the 6-digit code" step shared by registration and unverified
+ * login. The code is emailed (free Gmail SMTP); in dev the backend returns
+ * it as devCode so the flow is testable without an inbox.
  */
-export default function OtpForm({
-  phone,
-  linkToken,
+export default function EmailOtpForm({
+  email,
   initialDevCode,
   resendAfterSeconds = 60,
   onVerified,
 }: {
-  phone: string;
-  /** Present when completing a Google sign-in. */
-  linkToken?: string;
+  email: string;
   initialDevCode?: string;
   resendAfterSeconds?: number;
   onVerified: (session: LoginResponse) => void;
@@ -42,7 +38,7 @@ export default function OtpForm({
     setError(null);
     setSubmitting(true);
     try {
-      onVerified(await authApi.verifyPhone(phone, code, linkToken));
+      onVerified(await authApi.verifyEmail(email, code));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Verification failed");
       setSubmitting(false);
@@ -52,7 +48,7 @@ export default function OtpForm({
   const resend = async () => {
     setError(null);
     try {
-      const sent = await authApi.resendOtp(phone);
+      const sent = await authApi.resendOtp(email);
       setDevCode(sent.devCode);
       setCooldown(sent.resendAfterSeconds);
     } catch (err) {
@@ -68,14 +64,14 @@ export default function OtpForm({
     <form onSubmit={(e) => void submit(e)} className="space-y-4">
       <p className="text-sm text-ink/80">
         We sent a 6-digit code to{" "}
-        <span className="font-mono font-bold">{phone}</span>. Enter it below to
-        confirm this is your number.
+        <span className="font-mono font-bold">{email}</span>. Enter it below to
+        confirm this is your email.
       </p>
 
       {devCode ? (
         <p className="rounded-xl border border-gold bg-gold/10 px-3.5 py-2.5 font-mono text-sm text-green-deep">
           Dev mode — your code is <span className="font-bold">{devCode}</span>
-          {/* TODO: WhatsApp/SMS delivery removes this hint (see OtpService). */}
+          {/* Set GMAIL_USER/GMAIL_APP_PASSWORD to email the code instead. */}
         </p>
       ) : null}
 
@@ -96,7 +92,7 @@ export default function OtpForm({
       </Field>
 
       <Button type="submit" disabled={submitting || code.length !== 6} className="w-full">
-        {submitting ? "Checking…" : "Confirm my number"}
+        {submitting ? "Checking…" : "Confirm my email"}
       </Button>
 
       <p className="text-center text-sm text-muted">

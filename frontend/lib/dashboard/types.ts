@@ -8,7 +8,12 @@
  * balance BookAm holds.
  */
 
-export type { LoginResponse, ProfileInput, SafeUser } from "../admin/types";
+export type {
+  LoginResponse,
+  OtpSentResponse,
+  ProfileInput,
+  SafeUser,
+} from "../admin/types";
 
 /** Where to send money OUTSIDE BookAm — display-only profile record. */
 export interface PayoutAccount {

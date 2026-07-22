@@ -5,7 +5,12 @@
  * Auth shapes are shared with the other consoles via lib/admin/types.
  */
 
-export type { LoginResponse, ProfileInput, SafeUser } from "../admin/types";
+export type {
+  LoginResponse,
+  OtpSentResponse,
+  ProfileInput,
+  SafeUser,
+} from "../admin/types";
 export type {
   CircleFrequency,
   CircleStatus,

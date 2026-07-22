@@ -130,7 +130,7 @@ export default function ApplicationsPage() {
             <thead>
               <tr className="border-b border-line font-mono text-[11px] uppercase tracking-wide text-ink/60">
                 <th scope="col" className="px-5 py-3 font-bold">Applicant</th>
-                <th scope="col" className="px-5 py-3 font-bold">Phone</th>
+                <th scope="col" className="px-5 py-3 font-bold">Email</th>
                 <th scope="col" className="px-5 py-3 font-bold">Applied</th>
                 <th scope="col" className="px-5 py-3 font-bold">Status</th>
                 <th scope="col" className="px-5 py-3 font-bold">
@@ -148,7 +148,7 @@ export default function ApplicationsPage() {
                     {app.applicant.name}
                   </td>
                   <td className="px-5 py-3.5 font-mono text-xs">
-                    {app.applicant.phone}
+                    {app.applicant.email}
                   </td>
                   <td className="px-5 py-3.5 text-muted">
                     {formatDate(app.createdAt)}
@@ -232,7 +232,10 @@ function ApplicationDetail({
     <Modal title="Collector request" onClose={onClose}>
       <dl className="space-y-3 text-sm">
         <DetailRow label="Applicant" value={application.applicant.name} />
-        <DetailRow label="Phone" value={application.applicant.phone} mono />
+        <DetailRow label="Email" value={application.applicant.email} mono />
+        {application.applicant.phone ? (
+          <DetailRow label="Phone" value={application.applicant.phone} mono />
+        ) : null}
         <DetailRow label="Applied" value={formatDate(application.createdAt)} />
         <div>
           <dt className="font-mono text-[11px] font-bold uppercase tracking-wide text-ink/60">

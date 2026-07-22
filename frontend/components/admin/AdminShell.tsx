@@ -154,7 +154,7 @@ export default function AdminShell({ children }: { children: ReactNode }) {
               </div>
               <div className="flex items-center gap-3">
                 <span className="font-mono text-xs text-muted">
-                  {user.phone}
+                  {user.email}
                 </span>
                 <button
                   onClick={signOut}

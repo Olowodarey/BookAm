@@ -11,9 +11,8 @@ import type { User } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service';
 import { OtpService } from './otp.service';
+import { EmailOtpService } from './email-otp.service';
 import type {
-  GoogleLinkPayload,
-  GoogleSignInResponse,
   JwtPayload,
   LoginResponse,
   OtpSentResponse,
@@ -23,11 +22,13 @@ import type {
 export function toSafeUser(user: User): SafeUser {
   return {
     id: user.id,
-    phone: user.phone,
+    email: user.email,
     name: user.name,
     role: user.role,
     status: user.status,
-    email: user.email,
+    emailVerifiedAt: user.emailVerifiedAt,
+    phone: user.phone,
+    phoneVerifiedAt: user.phoneVerifiedAt,
     altPhone: user.altPhone,
     bankName: user.bankName,
     bankAccountNumber: user.bankAccountNumber,
@@ -47,12 +48,11 @@ interface GoogleTokenInfo {
 }
 
 /**
- * Everyone registers as a contributor (MEMBER). Becoming a collector goes
- * through a CollectorApplication that the platform admin approves. The phone
- * number is the primary identity — it must be OTP-verified because it is how
- * accounts match the memberships coordinators create from their WhatsApp
- * groups. Google sign-in is a convenience credential on top: a Google account
- * still has to link and verify a phone before it can do anything.
+ * Email is BookAm's primary identity: one email, one account. People sign up
+ * with email+password (verified by an emailed code) or with Google (whose
+ * email is already verified) — and the two link automatically on the same
+ * email. A phone/WhatsApp number is optional and verified in-app later; that
+ * is what claims any circle memberships a coordinator added by that number.
  */
 @Injectable()
 export class AuthService {
@@ -60,43 +60,52 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
     private readonly otp: OtpService,
+    private readonly emailOtp: EmailOtpService,
   ) {}
 
-  async login(phone: string, password: string): Promise<LoginResponse> {
-    const user = await this.prisma.user.findUnique({ where: { phone } });
+  private static normalizeEmail(email: string): string {
+    return email.trim().toLowerCase();
+  }
+
+  async login(email: string, password: string): Promise<LoginResponse> {
+    email = AuthService.normalizeEmail(email);
+    const user = await this.prisma.user.findUnique({ where: { email } });
     if (!user?.passwordHash) {
-      throw new UnauthorizedException('Invalid phone number or password');
+      throw new UnauthorizedException('Invalid email or password');
     }
     const passwordOk = await bcrypt.compare(password, user.passwordHash);
     if (!passwordOk) {
-      throw new UnauthorizedException('Invalid phone number or password');
+      throw new UnauthorizedException('Invalid email or password');
     }
     if (user.status === 'SUSPENDED') {
       throw new ForbiddenException('This account is suspended');
     }
-    if (!user.phoneVerifiedAt) {
+    if (!user.emailVerifiedAt) {
       // Password was correct — nudge them straight into verification.
-      const sent = await this.otp.send(user.phone).catch(() => null);
+      const sent = await this.emailOtp.send(user.email).catch(() => null);
       throw new ForbiddenException({
-        message: 'Verify your phone number to continue',
-        code: 'PHONE_NOT_VERIFIED',
-        phone: user.phone,
+        message: 'Verify your email to continue',
+        code: 'EMAIL_NOT_VERIFIED',
+        email: user.email,
         ...(sent?.devCode ? { devCode: sent.devCode } : {}),
       });
     }
     return this.issueSession(user);
   }
 
-  /** Step 1 of sign-up: create the MEMBER account and send the OTP. */
+  /** Step 1 of email sign-up: create the MEMBER account and email the code. */
   async register(
     name: string,
-    phone: string,
+    email: string,
     password: string,
   ): Promise<OtpSentResponse> {
-    const existing = await this.prisma.user.findUnique({ where: { phone } });
-    if (existing?.phoneVerifiedAt) {
+    email = AuthService.normalizeEmail(email);
+    const existing = await this.prisma.user.findUnique({ where: { email } });
+    if (existing?.emailVerifiedAt) {
+      // Never set a password on an already-verified account here — that would
+      // be account takeover. Google-only users add a password via forgot-password.
       throw new ConflictException(
-        'This phone number already has an account — sign in instead',
+        'This email already has an account — sign in instead',
       );
     }
     const passwordHash = await bcrypt.hash(password, 10);
@@ -108,86 +117,46 @@ export class AuthService {
       });
     } else {
       await this.prisma.user.create({
-        data: { phone, name, passwordHash, role: 'MEMBER' },
+        data: { email, name, passwordHash, role: 'MEMBER' },
       });
     }
-    const sent = await this.otp.send(phone);
-    return { phone, requiresVerification: true, ...sent };
+    return { requiresVerification: true, ...(await this.emailOtp.send(email)) };
   }
 
-  /**
-   * Step 2: the OTP proves phone ownership. Completes password sign-ups and
-   * Google link-ups alike, then claims any circle memberships a coordinator
-   * already created for this phone number.
-   */
-  async verifyPhone(
-    phone: string,
-    code: string,
-    linkToken?: string,
-  ): Promise<LoginResponse> {
-    await this.otp.verify(phone, code);
-
-    let user: User;
-    if (linkToken) {
-      const link = await this.readLinkToken(linkToken);
-      const existing = await this.prisma.user.findUnique({ where: { phone } });
-      if (existing) {
-        if (existing.googleId && existing.googleId !== link.googleId) {
-          throw new ConflictException(
-            'This phone number is already linked to a different Google account',
-          );
-        }
-        user = await this.prisma.user.update({
-          where: { id: existing.id },
-          data: {
-            googleId: link.googleId,
-            email: link.email,
-            phoneVerifiedAt: existing.phoneVerifiedAt ?? new Date(),
-          },
-        });
-      } else {
-        user = await this.prisma.user.create({
-          data: {
-            phone,
-            name: link.name,
-            email: link.email,
-            googleId: link.googleId,
-            role: 'MEMBER',
-            phoneVerifiedAt: new Date(),
-          },
-        });
-      }
-    } else {
-      const existing = await this.prisma.user.findUnique({ where: { phone } });
-      if (!existing) {
-        throw new BadRequestException('No sign-up found for this phone number');
-      }
-      user = await this.prisma.user.update({
-        where: { id: existing.id },
-        data: { phoneVerifiedAt: existing.phoneVerifiedAt ?? new Date() },
-      });
+  /** Step 2: the emailed code proves ownership and activates the account. */
+  async verifyEmail(email: string, code: string): Promise<LoginResponse> {
+    email = AuthService.normalizeEmail(email);
+    await this.emailOtp.verify(email, code);
+    const existing = await this.prisma.user.findUnique({ where: { email } });
+    if (!existing) {
+      throw new BadRequestException('No sign-up found for this email');
     }
-
+    const user = await this.prisma.user.update({
+      where: { id: existing.id },
+      data: { emailVerifiedAt: existing.emailVerifiedAt ?? new Date() },
+    });
     if (user.status === 'SUSPENDED') {
       throw new ForbiddenException('This account is suspended');
     }
-    await this.claimMemberships(user);
     return this.issueSession(user);
   }
 
-  async resendOtp(phone: string): Promise<OtpSentResponse> {
+  async resendEmailOtp(email: string): Promise<OtpSentResponse> {
     // Deliberately quiet about whether an account exists; the cooldown in
-    // OtpService keeps this from being used as a spam channel.
-    const sent = await this.otp.send(phone);
-    return { phone, requiresVerification: true, ...sent };
+    // EmailOtpService keeps this from being used as a spam channel.
+    return {
+      requiresVerification: true,
+      ...(await this.emailOtp.send(AuthService.normalizeEmail(email))),
+    };
   }
 
   /**
    * Google Identity Services hands the client an ID token; we validate it
-   * against Google and either sign the user in or ask for a phone to link.
-   * No SDK needed — Google's tokeninfo endpoint does the verification.
+   * against Google, then sign the user in — creating the account on first
+   * sight, or linking to an existing same-email account. Google emails are
+   * always verified, so no extra verification step is needed.
    */
-  async googleSignIn(idToken: string): Promise<GoogleSignInResponse> {
+  async googleSignIn(idToken: string): Promise<LoginResponse> {
     const clientId = process.env.GOOGLE_CLIENT_ID;
     if (!clientId) {
       throw new ServiceUnavailableException(
@@ -214,60 +183,47 @@ export class AuthService {
       throw new UnauthorizedException('Google sign-in could not be verified');
     }
 
-    const user =
-      (await this.prisma.user.findUnique({
-        where: { googleId: info.sub },
-      })) ??
-      (await this.prisma.user.findUnique({ where: { email: info.email } }));
+    const email = AuthService.normalizeEmail(info.email);
+    const existing =
+      (await this.prisma.user.findUnique({ where: { googleId: info.sub } })) ??
+      (await this.prisma.user.findUnique({ where: { email } }));
 
-    if (user) {
-      if (user.status === 'SUSPENDED') {
+    if (existing) {
+      if (existing.status === 'SUSPENDED') {
         throw new ForbiddenException('This account is suspended');
       }
-      if (user.phoneVerifiedAt) {
-        if (!user.googleId) {
-          await this.prisma.user.update({
-            where: { id: user.id },
-            data: { googleId: info.sub },
-          });
-        }
-        return { status: 'SIGNED_IN', session: await this.issueSession(user) };
-      }
+      // Link the Google credential and trust the verified email.
+      const user =
+        existing.googleId && existing.emailVerifiedAt
+          ? existing
+          : await this.prisma.user.update({
+              where: { id: existing.id },
+              data: {
+                googleId: existing.googleId ?? info.sub,
+                emailVerifiedAt: existing.emailVerifiedAt ?? new Date(),
+              },
+            });
+      return this.issueSession(user);
     }
 
-    // New to BookAm (or phone never verified): collect + verify a phone so
-    // the account ties into their WhatsApp-group circles.
-    const payload: GoogleLinkPayload = {
-      purpose: 'google-link',
-      googleId: info.sub,
-      email: info.email,
-      name: info.name ?? info.email.split('@')[0],
-    };
-    return {
-      status: 'NEEDS_PHONE',
-      linkToken: await this.jwt.signAsync(payload, { expiresIn: '15m' }),
-      name: payload.name,
-      email: payload.email,
-    };
-  }
-
-  /** Sends the OTP for the phone a Google user wants to link. */
-  async linkPhone(linkToken: string, phone: string): Promise<OtpSentResponse> {
-    const link = await this.readLinkToken(linkToken);
-    const existing = await this.prisma.user.findUnique({ where: { phone } });
-    if (existing?.googleId && existing.googleId !== link.googleId) {
-      throw new ConflictException(
-        'This phone number is already linked to a different Google account',
-      );
-    }
-    const sent = await this.otp.send(phone);
-    return { phone, requiresVerification: true, ...sent };
+    const created = await this.prisma.user.create({
+      data: {
+        email,
+        name: info.name ?? email.split('@')[0],
+        googleId: info.sub,
+        role: 'MEMBER',
+        emailVerifiedAt: new Date(),
+      },
+    });
+    return this.issueSession(created);
   }
 
   // ---- Settings ------------------------------------------------------------
 
   /** Empty string clears a nullable profile field; undefined leaves it. */
-  private static clearable(value: string | undefined): string | null | undefined {
+  private static clearable(
+    value: string | undefined,
+  ): string | null | undefined {
     if (value === undefined) return undefined;
     return value.trim() === '' ? null : value.trim();
   }
@@ -326,44 +282,85 @@ export class AuthService {
 
   // ---- Forgot password -----------------------------------------------------
 
-  /** Sends an OTP so the owner of the phone can set a new password. */
-  async forgotPassword(phone: string): Promise<OtpSentResponse> {
-    const user = await this.prisma.user.findUnique({ where: { phone } });
+  /** Emails a code so the owner can set a new password (also adds a password
+   *  to a Google-only account, since the code proves email ownership). */
+  async forgotPassword(email: string): Promise<OtpSentResponse> {
+    email = AuthService.normalizeEmail(email);
+    const user = await this.prisma.user.findUnique({ where: { email } });
     if (!user) {
       throw new BadRequestException(
-        'No account with this phone number — create one instead',
+        'No account with this email — create one instead',
       );
     }
-    const sent = await this.otp.send(phone);
-    return { phone, requiresVerification: true, ...sent };
+    return {
+      requiresVerification: true,
+      ...(await this.emailOtp.send(email, 'password reset')),
+    };
   }
 
   /**
-   * The OTP proves phone ownership, so this also verifies the phone and
+   * The emailed code proves ownership, so this also verifies the email and
    * signs the user straight in with their new password set.
    */
   async resetPassword(
-    phone: string,
+    email: string,
     code: string,
     newPassword: string,
   ): Promise<LoginResponse> {
-    await this.otp.verify(phone, code);
-    const existing = await this.prisma.user.findUnique({ where: { phone } });
+    email = AuthService.normalizeEmail(email);
+    await this.emailOtp.verify(email, code);
+    const existing = await this.prisma.user.findUnique({ where: { email } });
     if (!existing) {
-      throw new BadRequestException('No account with this phone number');
+      throw new BadRequestException('No account with this email');
     }
     const user = await this.prisma.user.update({
       where: { id: existing.id },
       data: {
         passwordHash: await bcrypt.hash(newPassword, 10),
-        phoneVerifiedAt: existing.phoneVerifiedAt ?? new Date(),
+        emailVerifiedAt: existing.emailVerifiedAt ?? new Date(),
       },
     });
     if (user.status === 'SUSPENDED') {
       throw new ForbiddenException('This account is suspended');
     }
-    await this.claimMemberships(user);
     return this.issueSession(user);
+  }
+
+  // ---- Optional phone verification (in-app) --------------------------------
+
+  /** Sends an OTP to the WhatsApp/phone number the signed-in user wants to add. */
+  async sendPhoneOtp(userId: string, phone: string): Promise<OtpSentResponse> {
+    const owner = await this.prisma.user.findUnique({ where: { phone } });
+    if (owner && owner.id !== userId) {
+      throw new ConflictException(
+        'This phone number is already linked to another account',
+      );
+    }
+    return { requiresVerification: true, ...(await this.otp.send(phone)) };
+  }
+
+  /**
+   * Confirms the phone belongs to the signed-in user, then claims any circle
+   * memberships a coordinator already created for that number.
+   */
+  async verifyPhone(
+    userId: string,
+    phone: string,
+    code: string,
+  ): Promise<SafeUser> {
+    await this.otp.verify(phone, code);
+    const owner = await this.prisma.user.findUnique({ where: { phone } });
+    if (owner && owner.id !== userId) {
+      throw new ConflictException(
+        'This phone number is already linked to another account',
+      );
+    }
+    const user = await this.prisma.user.update({
+      where: { id: userId },
+      data: { phone, phoneVerifiedAt: new Date() },
+    });
+    await this.claimMemberships(user);
+    return toSafeUser(user);
   }
 
   /**
@@ -371,28 +368,17 @@ export class AuthService {
    * accounts; once the phone is verified, those memberships become theirs.
    */
   private async claimMemberships(user: User): Promise<void> {
+    if (!user.phone) return;
     await this.prisma.membership.updateMany({
       where: { phone: user.phone, userId: null },
       data: { userId: user.id },
     });
   }
 
-  private async readLinkToken(token: string): Promise<GoogleLinkPayload> {
-    try {
-      const payload = await this.jwt.verifyAsync<GoogleLinkPayload>(token);
-      if (payload.purpose !== 'google-link') throw new Error('wrong purpose');
-      return payload;
-    } catch {
-      throw new UnauthorizedException(
-        'This Google sign-in expired — please try again',
-      );
-    }
-  }
-
   private async issueSession(user: User): Promise<LoginResponse> {
     const payload: JwtPayload = {
       sub: user.id,
-      phone: user.phone,
+      email: user.email,
       role: user.role,
     };
     return {

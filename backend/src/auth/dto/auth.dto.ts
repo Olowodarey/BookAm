@@ -1,6 +1,6 @@
 import {
+  IsEmail,
   IsNotEmpty,
-  IsOptional,
   IsString,
   Matches,
   MaxLength,
@@ -16,8 +16,9 @@ export class RegisterDto {
   @MaxLength(80)
   name!: string;
 
-  @Matches(PHONE_PATTERN, { message: PHONE_MESSAGE })
-  phone!: string;
+  @IsEmail({}, { message: 'enter a valid email address' })
+  @MaxLength(160)
+  email!: string;
 
   @IsString()
   @MinLength(8, { message: 'password must be at least 8 characters' })
@@ -25,23 +26,17 @@ export class RegisterDto {
   password!: string;
 }
 
-export class VerifyPhoneDto {
-  @Matches(PHONE_PATTERN, { message: PHONE_MESSAGE })
-  phone!: string;
+export class VerifyEmailDto {
+  @IsEmail({}, { message: 'enter a valid email address' })
+  email!: string;
 
   @Matches(/^[0-9]{6}$/, { message: 'code must be the 6-digit number we sent' })
   code!: string;
-
-  /** Present when completing a Google sign-in that needed a phone. */
-  @IsOptional()
-  @IsString()
-  @IsNotEmpty()
-  linkToken?: string;
 }
 
-export class ResendOtpDto {
-  @Matches(PHONE_PATTERN, { message: PHONE_MESSAGE })
-  phone!: string;
+export class ResendEmailOtpDto {
+  @IsEmail({}, { message: 'enter a valid email address' })
+  email!: string;
 }
 
 export class GoogleSignInDto {
@@ -51,11 +46,17 @@ export class GoogleSignInDto {
   idToken!: string;
 }
 
-export class LinkPhoneDto {
-  @IsString()
-  @IsNotEmpty()
-  linkToken!: string;
+// ---- Optional in-app phone verification ------------------------------------
 
+export class SendPhoneOtpDto {
   @Matches(PHONE_PATTERN, { message: PHONE_MESSAGE })
   phone!: string;
+}
+
+export class VerifyPhoneDto {
+  @Matches(PHONE_PATTERN, { message: PHONE_MESSAGE })
+  phone!: string;
+
+  @Matches(/^[0-9]{6}$/, { message: 'code must be the 6-digit number we sent' })
+  code!: string;
 }

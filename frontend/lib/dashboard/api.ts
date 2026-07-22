@@ -8,6 +8,7 @@ import type {
   InvitePreview,
   LoginResponse,
   MemberInfo,
+  OtpSentResponse,
   PayoutInfo,
   ProfileInput,
   ReminderInfo,
@@ -109,10 +110,10 @@ function upload<T>(path: string, file: File): Promise<T> {
 
 export const coordinatorApi = {
   // Auth (same endpoints as the admin console; role must be COORDINATOR)
-  login: (phone: string, password: string) =>
+  login: (email: string, password: string) =>
     request<LoginResponse>("/auth/login", {
       method: "POST",
-      body: { phone, password },
+      body: { email, password },
     }),
   me: () => request<SafeUser>("/auth/me"),
 
@@ -123,6 +124,18 @@ export const coordinatorApi = {
     request<{ changed: true }>("/auth/change-password", {
       method: "POST",
       body: { currentPassword, newPassword },
+    }),
+
+  // Optional in-app WhatsApp/phone verification (claims memberships by number).
+  sendPhoneOtp: (phone: string) =>
+    request<OtpSentResponse>("/auth/phone/send-otp", {
+      method: "POST",
+      body: { phone },
+    }),
+  verifyPhone: (phone: string, code: string) =>
+    request<SafeUser>("/auth/phone/verify", {
+      method: "POST",
+      body: { phone, code },
     }),
 
   // Circles

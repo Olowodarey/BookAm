@@ -5,6 +5,7 @@ import type {
   MyCircleCard,
   MyCollectorApplication,
   MyContribution,
+  OtpSentResponse,
   ProfileInput,
   SafeUser,
   VoteValue,
@@ -105,10 +106,10 @@ function upload<T>(path: string, file: File): Promise<T> {
 export const memberApi = {
   // Auth (same endpoints as the other consoles; any signed-in user may have
   // memberships — even coordinators save in other people's circles)
-  login: (phone: string, password: string) =>
+  login: (email: string, password: string) =>
     request<LoginResponse>("/auth/login", {
       method: "POST",
-      body: { phone, password },
+      body: { email, password },
     }),
   me: () => request<SafeUser>("/auth/me"),
 
@@ -120,6 +121,19 @@ export const memberApi = {
     request<{ changed: true }>("/auth/change-password", {
       method: "POST",
       body: { currentPassword, newPassword },
+    }),
+
+  // Optional in-app WhatsApp/phone verification — claims circle memberships a
+  // coordinator added by that number. Returns the updated user.
+  sendPhoneOtp: (phone: string) =>
+    request<OtpSentResponse>("/auth/phone/send-otp", {
+      method: "POST",
+      body: { phone },
+    }),
+  verifyPhone: (phone: string, code: string) =>
+    request<SafeUser>("/auth/phone/verify", {
+      method: "POST",
+      body: { phone, code },
     }),
 
   myCircles: () => request<MyCircleCard[]>("/member/circles"),

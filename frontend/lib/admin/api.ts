@@ -90,10 +90,10 @@ async function request<T>(
 
 export const adminApi = {
   // Auth
-  login: (phone: string, password: string) =>
+  login: (email: string, password: string) =>
     request<LoginResponse>("/auth/login", {
       method: "POST",
-      body: { phone, password },
+      body: { email, password },
     }),
   me: () => request<SafeUser>("/auth/me"),
 

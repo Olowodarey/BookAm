@@ -2,39 +2,34 @@
  * Unified auth client for the shared /login and /register pages.
  * Mirrors backend/src/auth/* response shapes by hand (independent packages).
  *
- * Everyone registers as a contributor (MEMBER); collector comes later via an
- * application the platform admin approves. Phones are OTP-verified because
- * the phone number is what ties an account to WhatsApp-group memberships.
+ * Email is BookAm's primary identity — one email, one account. Everyone
+ * registers as a contributor (MEMBER) with email+password (verified by an
+ * emailed code) or with Google, which links on the same email. A phone/
+ * WhatsApp number is optional and verified in-app later (see the settings
+ * pages), which is what claims coordinator-created circle memberships.
  */
 
-import type { LoginResponse, Role, SafeUser } from "../admin/types";
+import type {
+  LoginResponse,
+  OtpSentResponse,
+  Role,
+  SafeUser,
+} from "../admin/types";
 
-export type { LoginResponse, SafeUser };
+export type { LoginResponse, OtpSentResponse, SafeUser };
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
 export const GOOGLE_CLIENT_ID =
   process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? "";
 
-/** An OTP is on its way (dev builds surface the code as devCode). */
-export interface OtpSentResponse {
-  phone: string;
-  requiresVerification: true;
-  resendAfterSeconds: number;
-  devCode?: string;
-}
-
-export type GoogleSignInResponse =
-  | { status: "SIGNED_IN"; session: LoginResponse }
-  | { status: "NEEDS_PHONE"; linkToken: string; name: string; email: string };
-
 export class AuthApiError extends Error {
   constructor(
     public readonly status: number,
     message: string,
-    /** Machine-readable code, e.g. "PHONE_NOT_VERIFIED". */
+    /** Machine-readable code, e.g. "EMAIL_NOT_VERIFIED". */
     public readonly code?: string,
-    public readonly phone?: string,
+    public readonly email?: string,
     public readonly devCode?: string,
   ) {
     super(message);
@@ -59,7 +54,7 @@ async function post<T>(path: string, body: unknown): Promise<T> {
   const data = (await response.json().catch(() => ({}))) as {
     message?: string | string[];
     code?: string;
-    phone?: string;
+    email?: string;
     devCode?: string;
   };
   if (!response.ok) {
@@ -70,7 +65,7 @@ async function post<T>(path: string, body: unknown): Promise<T> {
       response.status,
       message,
       data.code,
-      data.phone,
+      data.email,
       data.devCode,
     );
   }
@@ -78,27 +73,22 @@ async function post<T>(path: string, body: unknown): Promise<T> {
 }
 
 export const authApi = {
-  login: (phone: string, password: string) =>
-    post<LoginResponse>("/auth/login", { phone, password }),
-  register: (name: string, phone: string, password: string) =>
-    post<OtpSentResponse>("/auth/register", { name, phone, password }),
-  verifyPhone: (phone: string, code: string, linkToken?: string) =>
-    post<LoginResponse>("/auth/verify-phone", {
-      phone,
-      code,
-      ...(linkToken ? { linkToken } : {}),
-    }),
-  resendOtp: (phone: string) =>
-    post<OtpSentResponse>("/auth/resend-otp", { phone }),
+  login: (email: string, password: string) =>
+    post<LoginResponse>("/auth/login", { email, password }),
+  register: (name: string, email: string, password: string) =>
+    post<OtpSentResponse>("/auth/register", { name, email, password }),
+  verifyEmail: (email: string, code: string) =>
+    post<LoginResponse>("/auth/verify-email", { email, code }),
+  resendOtp: (email: string) =>
+    post<OtpSentResponse>("/auth/resend-otp", { email }),
+  /** Google signs in directly, creating or linking a same-email account. */
   google: (idToken: string) =>
-    post<GoogleSignInResponse>("/auth/google", { idToken }),
-  googleLinkPhone: (linkToken: string, phone: string) =>
-    post<OtpSentResponse>("/auth/google/link-phone", { linkToken, phone }),
-  forgotPassword: (phone: string) =>
-    post<OtpSentResponse>("/auth/forgot-password", { phone }),
-  /** OTP-verified reset; signs the user in with the new password. */
-  resetPassword: (phone: string, code: string, newPassword: string) =>
-    post<LoginResponse>("/auth/reset-password", { phone, code, newPassword }),
+    post<LoginResponse>("/auth/google", { idToken }),
+  forgotPassword: (email: string) =>
+    post<OtpSentResponse>("/auth/forgot-password", { email }),
+  /** Code-verified reset; signs the user in with the new password. */
+  resetPassword: (email: string, code: string, newPassword: string) =>
+    post<LoginResponse>("/auth/reset-password", { email, code, newPassword }),
 };
 
 // Token keys used by each console's own API client — the unified login

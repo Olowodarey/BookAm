@@ -12,11 +12,15 @@ export type SubscriptionStatus = "ACTIVE" | "EXPIRED" | "CANCELLED";
 
 export interface SafeUser {
   id: string;
-  phone: string;
+  /** Primary identity — always present, always unique. */
+  email: string;
   name: string;
   role: Role;
   status: UserStatus;
-  email: string | null;
+  emailVerifiedAt: string | null;
+  /** Optional WhatsApp/phone number, verified in-app to claim circles. */
+  phone: string | null;
+  phoneVerifiedAt: string | null;
   /** Second phone number (e.g. the one the circle also knows). */
   altPhone: string | null;
   // Where money should be sent to this person OUTSIDE BookAm — a record
@@ -25,6 +29,13 @@ export interface SafeUser {
   bankAccountNumber: string | null;
   bankAccountName: string | null;
   createdAt: string;
+}
+
+/** A one-time code is on its way (dev builds surface it as devCode). */
+export interface OtpSentResponse {
+  requiresVerification: true;
+  resendAfterSeconds: number;
+  devCode?: string;
 }
 
 /** Settings update — all optional; empty string clears a field. */

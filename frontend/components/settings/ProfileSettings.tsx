@@ -1,7 +1,11 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
-import type { ProfileInput, SafeUser } from "@/lib/admin/types";
+import { useEffect, useState, type FormEvent } from "react";
+import type {
+  OtpSentResponse,
+  ProfileInput,
+  SafeUser,
+} from "@/lib/admin/types";
 import {
   Button,
   Card,
@@ -18,6 +22,9 @@ export interface SettingsApi {
     currentPassword: string,
     newPassword: string,
   ) => Promise<{ changed: true }>;
+  /** Optional in-app WhatsApp/phone verification. */
+  sendPhoneOtp: (phone: string) => Promise<OtpSentResponse>;
+  verifyPhone: (phone: string, code: string) => Promise<SafeUser>;
 }
 
 /**
@@ -43,6 +50,7 @@ export default function ProfileSettings({
       />
       <div className="grid max-w-3xl gap-4">
         <ProfileForm user={user} api={api} onSaved={onSaved} />
+        <WhatsAppForm user={user} api={api} onSaved={onSaved} />
         <PasswordForm api={api} />
       </div>
     </div>
@@ -116,11 +124,11 @@ function ProfileForm({
               className={inputClass}
             />
           </Field>
-          <Field label="Phone number (login — not editable)">
+          <Field label="Email (login — not editable)">
             <input
-              value={user.phone}
+              value={user.email}
               disabled
-              aria-label="Primary phone number, verified, not editable"
+              aria-label="Primary email, your identity, not editable"
               className={`${inputClass} opacity-60`}
             />
           </Field>
@@ -184,6 +192,163 @@ function ProfileForm({
           </Button>
         </div>
       </form>
+    </Card>
+  );
+}
+
+/**
+ * Optional in-app WhatsApp/phone verification. The phone isn't your identity
+ * (email is) — but verifying it claims any circle memberships a coordinator
+ * created for that number, so your circles find you.
+ */
+function WhatsAppForm({
+  user,
+  api,
+  onSaved,
+}: {
+  user: SafeUser;
+  api: SettingsApi;
+  onSaved: (user: SafeUser) => void;
+}) {
+  const verified = Boolean(user.phoneVerifiedAt);
+  const [phone, setPhone] = useState(user.phone ?? "");
+  const [stage, setStage] = useState<"idle" | "code">("idle");
+  const [code, setCode] = useState("");
+  const [devCode, setDevCode] = useState<string | undefined>(undefined);
+  const [cooldown, setCooldown] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const timer = setInterval(() => setCooldown((s) => s - 1), 1000);
+    return () => clearInterval(timer);
+  }, [cooldown]);
+
+  const sendCode = async (e: FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setSubmitting(true);
+    try {
+      const sent = await api.sendPhoneOtp(phone);
+      setDevCode(sent.devCode);
+      setCooldown(sent.resendAfterSeconds);
+      setStage("code");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not send the code");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const confirm = async (e: FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setSubmitting(true);
+    try {
+      const updated = await api.verifyPhone(phone, code);
+      onSaved(updated);
+      setStage("idle");
+      setCode("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Verification failed");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <Card className="px-5 py-5">
+      <div className="space-y-4">
+        <div>
+          <h2 className="font-display text-lg font-bold">
+            WhatsApp number{" "}
+            {verified ? (
+              <span className="ml-1 rounded-md bg-green/15 px-1.5 py-0.5 align-middle font-mono text-[10px] font-bold uppercase tracking-wide text-green">
+                Verified
+              </span>
+            ) : null}
+          </h2>
+          <p className="mt-1 text-sm text-muted">
+            Optional. Verify the number your circles know you by (the one from
+            the WhatsApp group) to claim any memberships added for it.
+          </p>
+        </div>
+
+        {error ? <ErrorNote message={error} /> : null}
+
+        {stage === "idle" ? (
+          <form onSubmit={(e) => void sendCode(e)} className="space-y-4">
+            <Field
+              label={
+                verified
+                  ? "Verified number (send a code to change it)"
+                  : "WhatsApp number"
+              }
+            >
+              <input
+                type="tel"
+                required
+                autoComplete="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="+2348012345678"
+                className={inputClass}
+              />
+            </Field>
+            <div className="flex justify-end">
+              <Button type="submit" disabled={submitting}>
+                {submitting
+                  ? "Sending code…"
+                  : verified
+                    ? "Send code to update"
+                    : "Send verification code"}
+              </Button>
+            </div>
+          </form>
+        ) : (
+          <form onSubmit={(e) => void confirm(e)} className="space-y-4">
+            <p className="text-sm text-ink/80">
+              We sent a 6-digit code to{" "}
+              <span className="font-mono font-bold">{phone}</span>.
+            </p>
+            {devCode ? (
+              <p className="rounded-xl border border-gold bg-gold/10 px-3.5 py-2.5 font-mono text-sm text-green-deep">
+                Dev mode — your code is{" "}
+                <span className="font-bold">{devCode}</span>
+              </p>
+            ) : null}
+            <Field label="Verification code">
+              <input
+                required
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                pattern="[0-9]{6}"
+                maxLength={6}
+                value={code}
+                onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+                placeholder="123456"
+                className={`${inputClass} text-center font-mono text-xl tracking-[0.4em]`}
+              />
+            </Field>
+            <div className="flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => {
+                  setStage("idle");
+                  setError(null);
+                }}
+                className="text-sm font-semibold text-muted underline underline-offset-2"
+              >
+                Change number
+              </button>
+              <Button type="submit" disabled={submitting || code.length !== 6}>
+                {submitting ? "Checking…" : "Confirm number"}
+              </Button>
+            </div>
+          </form>
+        )}
+      </div>
     </Card>
   );
 }

@@ -8,7 +8,7 @@ import { Button, ErrorNote, Field, inputClass } from "@/components/admin/ui";
 
 export default function AdminLoginPage() {
   const router = useRouter();
-  const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -18,7 +18,7 @@ export default function AdminLoginPage() {
     setError(null);
     setSubmitting(true);
     try {
-      const { accessToken, user } = await adminApi.login(phone, password);
+      const { accessToken, user } = await adminApi.login(email, password);
       if (user.role !== "ADMIN") {
         setError("This account is not a platform admin.");
         return;
@@ -55,14 +55,14 @@ export default function AdminLoginPage() {
 
           {error ? <ErrorNote message={error} /> : null}
 
-          <Field label="Phone number">
+          <Field label="Email address">
             <input
-              type="tel"
+              type="email"
               required
               autoComplete="username"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              placeholder="+2348000000001"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="admin@bookam.test"
               className={inputClass}
             />
           </Field>

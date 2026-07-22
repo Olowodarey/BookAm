@@ -41,7 +41,7 @@ BookAm is **tracking-only**. Members pay each other **directly**, exactly as the
 - **Frontend:** `frontend/` — Next.js 16 (App Router) + TypeScript + Tailwind CSS v4 (web app + marketing landing + admin console).
 - **Backend:** `backend/` — NestJS 11 (TypeScript, CommonJS), standalone API server on port **4000**.
 - **Database:** PostgreSQL via **Prisma 6** (`backend/prisma/schema.prisma` + migrations).
-- **Auth:** everyone registers as a contributor (MEMBER) with phone + password; the phone is OTP-verified (`PhoneOtp` model; delivery is a `// TODO: WhatsApp/Termii` in `backend/src/auth/otp.service.ts` — dev builds surface the code as `devCode`). Verifying a phone auto-claims any circle memberships coordinators created for that number. "Sign in with Google" is an optional extra credential (verified server-side via Google's tokeninfo endpoint, no SDK; enabled by setting `GOOGLE_CLIENT_ID` + `NEXT_PUBLIC_GOOGLE_CLIENT_ID`) — Google users still link + verify a phone. Becoming a COLLECTOR goes through a `CollectorApplication` (applied from `/me`, approved by the admin). Unified sign-in at `/login` routes by role; JWT + role guards unchanged.
+- **Auth (email-first):** email is the primary identity — one email, one account. Everyone registers as a contributor (MEMBER) with **email + password**; the email is verified by an emailed 6-digit code (`EmailOtp` model + `EmailOtpService`; sent over free Gmail SMTP in `backend/src/auth/email.service.ts` — set `GMAIL_USER` + `GMAIL_APP_PASSWORD`, else dev builds log the mail and surface the code as `devCode`). "Sign in with Google" (verified server-side via Google's tokeninfo endpoint, no SDK; enabled by `GOOGLE_CLIENT_ID` + `NEXT_PUBLIC_GOOGLE_CLIENT_ID`) signs in directly and **auto-links** to a same-email account — Google emails are already verified, so no extra step. A Google-only user adds a password via forgot-password (the emailed code proves ownership); registering a password on an already-verified email is refused (anti-takeover). **Phone/WhatsApp is optional**, verified in-app from the settings pages (authenticated `POST /auth/phone/send-otp` + `/auth/phone/verify`, still `PhoneOtp` + `OtpService`); verifying a phone auto-claims any circle memberships coordinators created for that number. Becoming a COLLECTOR goes through a `CollectorApplication` (applied from `/me`, approved by the admin). JWT payload is `{ sub, email, role }`; JWT + role guards unchanged. Frontend: unified `/login` + `/register` (email+password, emailed-code step via `components/auth/EmailOtpForm`, Google button), `/forgot-password`, and a "WhatsApp number" verify card in `components/settings/ProfileSettings`. `SafeUser` mirror in `lib/admin/types.ts` (`email` required, `phone` nullable, `emailVerifiedAt`/`phoneVerifiedAt`).
 - **Notifications:** WhatsApp / SMS *(e.g. WhatsApp Business API, or a provider like Termii / Africa's Talking)*.
 - **Payments:** none held in-app for **ajo contributions** (see "The money rule"). BookAm's **own SaaS subscription fees** (coordinators paying for the software) are legitimate revenue and are managed as records in the admin console; actual charge collection via Paystack is a marked `// TODO: Paystack` integration point in `backend/src/admin/subscriptions.service.ts`.
 
@@ -113,7 +113,7 @@ logic in `backend/` and UI in `frontend/` — don't mix them.
 
 Implemented in `backend/prisma/schema.prisma` (✓ = in the schema today):
 
-- **User** ✓ — a person. May be a coordinator, a member, or both. Identified by phone number. Has `role` (MEMBER | COORDINATOR | ADMIN), `status` (ACTIVE | SUSPENDED), and an optional `passwordHash` (admin login stopgap until OTP).
+- **User** ✓ — a person. May be a coordinator, a member, or both. Identified by **email** (unique, required; `emailVerifiedAt`). Optional `googleId` (linked on same-email Google sign-in), optional `phone` (unique, nullable; `phoneVerifiedAt` — verified in-app to claim memberships), and an optional `passwordHash` (Google-only users may have none). Has `role` (MEMBER | COORDINATOR | ADMIN), `status` (ACTIVE | SUSPENDED).
 - **CollectorApplication** ✓ — a user's request to become a coordinator: applicant, status (PENDING | APPROVED | REJECTED), applicant's note, reviewNote, reviewedBy, reviewedAt. Approving promotes the applicant to COORDINATOR.
 - **SubscriptionPlan** ✓ — a BookAm SaaS pricing tier: name, priceNaira, interval (MONTHLY | QUARTERLY | YEARLY), maxCircles (null = unlimited), features[], active. *This is BookAm's own revenue, not ajo money.*
 - **Subscription** ✓ — which user is on which plan: status (ACTIVE | EXPIRED | CANCELLED), periodStart/periodEnd. Records only; Paystack charge collection is a marked TODO.
@@ -155,11 +155,11 @@ Key rules encoded: rotation position is managed per-circle in the service layer;
   `pnpm install`, `npx prisma migrate dev`, `npx prisma db seed`, `pnpm start:dev` → API on :4000.
 - **Frontend** (`frontend/`): copy `.env.example` → `.env.local` (defaults to :4000), then
   `pnpm install`, `pnpm dev` → app on :3000. Admin console at `/admin` (seeded admin:
-  phone `+2348000000001`, password `admin1234` — change via `SEED_ADMIN_*` env vars).
-  Coordinator dashboard at `/dashboard` (seeded coordinator: phone `+2348011111111`,
+  email `admin@bookam.test`, password `admin1234` — change via `SEED_ADMIN_*` env vars).
+  Coordinator dashboard at `/dashboard` (seeded coordinator: email `iya.basira@bookam.test`,
   password `alajo1234` — change via `SEED_COORDINATOR_PASSWORD`; comes with a demo
   circle, members and mixed contribution statuses).
-  Member dashboard at `/me` (seeded members, e.g. phone `+2348066666666`, password
+  Member dashboard at `/me` (seeded members, e.g. email `amina.yusuf@bookam.test`, password
   `member1234` — change via `SEED_MEMBER_PASSWORD`; the demo circle includes an open
   appeal with votes).
   Dedicated test accounts (own circle "Ketu Market Daily", distinct passwords):

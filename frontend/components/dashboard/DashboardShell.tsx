@@ -228,7 +228,7 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
                 <span className="font-semibold text-ink">{user.name}</span>
               </div>
               <div className="flex items-center gap-3">
-                <span className="font-mono text-xs text-muted">{user.phone}</span>
+                <span className="font-mono text-xs text-muted">{user.email}</span>
                 <button
                   onClick={signOut}
                   className="rounded-xl border border-line px-3 py-1.5 text-sm font-semibold text-ink/70 transition-colors hover:border-green hover:text-green"

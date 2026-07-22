@@ -12,13 +12,12 @@ import {
 } from "@/lib/auth/api";
 import AuthShell from "@/components/auth/AuthShell";
 import GoogleButton from "@/components/auth/GoogleButton";
-import OtpForm from "@/components/auth/OtpForm";
+import EmailOtpForm from "@/components/auth/EmailOtpForm";
 import { Button, ErrorNote, Field, inputClass } from "@/components/admin/ui";
 
 type Step =
   | { kind: "details" }
-  | { kind: "verify"; phone: string; devCode?: string; linkToken?: string }
-  | { kind: "google-phone"; linkToken: string; name: string };
+  | { kind: "verify"; email: string; devCode?: string };
 
 /**
  * Everyone joins BookAm as a contributor. Wanting to run circles comes
@@ -28,7 +27,7 @@ export default function RegisterPage() {
   const router = useRouter();
   const [step, setStep] = useState<Step>({ kind: "details" });
   const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -36,9 +35,7 @@ export default function RegisterPage() {
   const finish = useCallback(
     (session: LoginResponse) => {
       storeSession(session);
-      router.replace(
-        consumePostAuthRedirect() ?? homeFor(session.user.role),
-      );
+      router.replace(consumePostAuthRedirect() ?? homeFor(session.user.role));
     },
     [router],
   );
@@ -48,8 +45,8 @@ export default function RegisterPage() {
     setError(null);
     setSubmitting(true);
     try {
-      const sent = await authApi.register(name, phone, password);
-      setStep({ kind: "verify", phone: sent.phone, devCode: sent.devCode });
+      const sent = await authApi.register(name, email, password);
+      setStep({ kind: "verify", email, devCode: sent.devCode });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not sign you up");
       setSubmitting(false);
@@ -59,22 +56,8 @@ export default function RegisterPage() {
   const onGoogleCredential = useCallback(
     (idToken: string) => {
       setError(null);
-      authApi.google(idToken).then(
-        (result) => {
-          if (result.status === "SIGNED_IN") {
-            finish(result.session);
-          } else {
-            setStep({
-              kind: "google-phone",
-              linkToken: result.linkToken,
-              name: result.name,
-            });
-          }
-        },
-        (err: unknown) =>
-          setError(
-            err instanceof Error ? err.message : "Google sign-in failed",
-          ),
+      authApi.google(idToken).then(finish, (err: unknown) =>
+        setError(err instanceof Error ? err.message : "Google sign-in failed"),
       );
     },
     [finish],
@@ -101,9 +84,8 @@ export default function RegisterPage() {
             Join your circle on BookAm
           </h1>
           <p className="text-sm text-muted">
-            Use the same phone number as your WhatsApp group — your circles
-            will find you by it. Want to run circles yourself? Apply to be a
-            collector after you join.
+            Sign up with your email — or continue with Google. Want to run
+            circles yourself? Apply to be a collector after you join.
           </p>
 
           {error ? <ErrorNote message={error} /> : null}
@@ -120,14 +102,14 @@ export default function RegisterPage() {
             />
           </Field>
 
-          <Field label="Phone number (WhatsApp)">
+          <Field label="Email address">
             <input
-              type="tel"
+              type="email"
               required
-              autoComplete="tel"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              placeholder="+2348012345678"
+              autoComplete="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@example.com"
               className={inputClass}
             />
           </Field>
@@ -151,86 +133,16 @@ export default function RegisterPage() {
 
           <GoogleButton onCredential={onGoogleCredential} />
         </form>
-      ) : step.kind === "verify" ? (
+      ) : (
         <div className="space-y-4">
-          <h1 className="font-display text-lg font-bold">
-            Confirm your number
-          </h1>
-          <OtpForm
-            phone={step.phone}
-            linkToken={step.linkToken}
+          <h1 className="font-display text-lg font-bold">Confirm your email</h1>
+          <EmailOtpForm
+            email={step.email}
             initialDevCode={step.devCode}
             onVerified={finish}
           />
         </div>
-      ) : (
-        <GooglePhoneStep
-          linkToken={step.linkToken}
-          name={step.name}
-          onOtpSent={(p, devCode) =>
-            setStep({
-              kind: "verify",
-              phone: p,
-              devCode,
-              linkToken: step.linkToken,
-            })
-          }
-        />
       )}
     </AuthShell>
-  );
-}
-
-function GooglePhoneStep({
-  linkToken,
-  name,
-  onOtpSent,
-}: {
-  linkToken: string;
-  name: string;
-  onOtpSent: (phone: string, devCode?: string) => void;
-}) {
-  const [phone, setPhone] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-
-  const submit = async (e: FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    setSubmitting(true);
-    try {
-      const sent = await authApi.googleLinkPhone(linkToken, phone);
-      onOtpSent(sent.phone, sent.devCode);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not send the code");
-      setSubmitting(false);
-    }
-  };
-
-  return (
-    <form onSubmit={(e) => void submit(e)} className="space-y-4">
-      <h1 className="font-display text-lg font-bold">
-        Almost there, {name.split(" ")[0]}
-      </h1>
-      <p className="text-sm text-ink/80">
-        Your circles know you by your phone number — the same one from the
-        WhatsApp group. Add it and we&apos;ll send a code to confirm.
-      </p>
-      {error ? <ErrorNote message={error} /> : null}
-      <Field label="Phone number">
-        <input
-          type="tel"
-          required
-          autoComplete="tel"
-          value={phone}
-          onChange={(e) => setPhone(e.target.value)}
-          placeholder="+2348012345678"
-          className={inputClass}
-        />
-      </Field>
-      <Button type="submit" disabled={submitting} className="w-full">
-        {submitting ? "Sending code…" : "Send verification code"}
-      </Button>
-    </form>
   );
 }

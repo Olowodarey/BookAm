@@ -1,4 +1,5 @@
 import {
+  IsEmail,
   IsNotEmpty,
   IsOptional,
   IsString,
@@ -12,8 +13,8 @@ const PHONE_PATTERN = /^\+?[0-9]{7,15}$/;
 
 /**
  * Settings update. Every field is optional; sending an empty string clears
- * the value. The primary phone is NOT editable here — it is the account's
- * identity and would need a fresh OTP flow to change.
+ * the value. The primary email is NOT editable here — it is the account's
+ * identity and would need a fresh verification flow to change.
  */
 export class UpdateProfileDto {
   @IsOptional()
@@ -59,17 +60,13 @@ export class ChangePasswordDto {
 }
 
 export class ForgotPasswordDto {
-  @Matches(PHONE_PATTERN, {
-    message: 'phone must be digits only, e.g. +2348012345678',
-  })
-  phone!: string;
+  @IsEmail({}, { message: 'enter a valid email address' })
+  email!: string;
 }
 
 export class ResetPasswordDto {
-  @Matches(PHONE_PATTERN, {
-    message: 'phone must be digits only, e.g. +2348012345678',
-  })
-  phone!: string;
+  @IsEmail({}, { message: 'enter a valid email address' })
+  email!: string;
 
   @Matches(/^[0-9]{6}$/, { message: 'code must be the 6-digit number we sent' })
   code!: string;

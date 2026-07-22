@@ -84,16 +84,22 @@ enum VoteValue {
 
 model User {
   id                String     @id @default(cuid())
-  phone             String     @unique
+  // Email is BookAm's primary identity — one email, one account. Set by
+  // email+password sign-up or Google sign-in, which link on the same email.
+  email             String     @unique
   name              String
-  // Password sign-in; Google users may not have one.
+  // Password sign-in; Google-only users may not have one.
   passwordHash      String?
-  // Set once the phone is confirmed via OTP — the phone is BookAm's primary
-  // identity (it ties accounts to WhatsApp-group circle memberships).
-  phoneVerifiedAt   DateTime?
-  // Google sign-in (optional second credential; phone is still required).
-  email             String?    @unique
+  // Set once the email is confirmed (via emailed OTP, or trusted from Google
+  // which always returns a verified email).
+  emailVerifiedAt   DateTime?
+  // Google sign-in credential.
   googleId          String?    @unique
+  // Optional WhatsApp/phone number, verified in-app later. Verifying it claims
+  // any circle memberships a coordinator already added by that number — but a
+  // phone is no longer required to have an account.
+  phone             String?    @unique
+  phoneVerifiedAt   DateTime?
   // Profile/settings — records only, so circles know where to send money
   // OUTSIDE BookAm. Never used to move funds in-app.
   altPhone          String?
@@ -290,6 +296,19 @@ model PhoneOtp {
   createdAt  DateTime  @default(now())
 
   @@index([phone, createdAt])
+}
+
+model EmailOtp {
+  id         String    @id @default(cuid())
+  email      String
+  codeHash   String
+  expiresAt  DateTime
+  // Wrong guesses; the code locks after too many.
+  attempts   Int       @default(0)
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([email, createdAt])
 }
 
 // A member's request to be considered to collect next. Voting is advisory;
