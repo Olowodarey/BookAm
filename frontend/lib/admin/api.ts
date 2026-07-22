@@ -177,3 +177,41 @@ export const formatDate = (iso: string | null | undefined) =>
         year: "numeric",
       })
     : "—";
+
+/**
+ * A deadline shown in West Africa Time (fixed UTC+1), the same to every
+ * member regardless of their device — e.g. "Sun 3 Aug, 6:00 PM".
+ */
+export const formatDeadline = (iso: string | null | undefined) =>
+  iso
+    ? new Date(iso).toLocaleString("en-NG", {
+        weekday: "short",
+        day: "numeric",
+        month: "short",
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+        timeZone: "Africa/Lagos",
+      })
+    : "—";
+
+/** A <input type="datetime-local"> value ("YYYY-MM-DDTHH:MM") is WAT → UTC ISO. */
+export function watInputToISO(local: string): string {
+  // West Africa Time is a fixed UTC+1 (no DST), so append the offset directly.
+  return new Date(`${local}:00+01:00`).toISOString();
+}
+
+/** A UTC ISO instant → the WAT "YYYY-MM-DDTHH:MM" a datetime-local expects. */
+export function isoToWatInput(iso: string): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Africa/Lagos",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(new Date(iso));
+  const g = (t: string) => parts.find((p) => p.type === t)?.value ?? "00";
+  return `${g("year")}-${g("month")}-${g("day")}T${g("hour")}:${g("minute")}`;
+}

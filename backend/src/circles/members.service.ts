@@ -7,6 +7,7 @@ import {
 import { randomBytes } from 'crypto';
 import type { Circle } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { EmailService } from '../auth/email.service';
 import { CirclesService } from './circles.service';
 import type { InviteMemberDto } from './dto/member.dto';
 import type {
@@ -15,42 +16,80 @@ import type {
   MemberInfo,
 } from './circles.types';
 
+function frontendUrl(): string {
+  return process.env.FRONTEND_URL ?? 'http://localhost:3000';
+}
+
 @Injectable()
 export class MembersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly circles: CirclesService,
+    private readonly email: EmailService,
   ) {}
 
   /**
-   * Invite an existing BookAm account into the circle by email. Creates an
-   * INVITED membership the person then accepts from their own dashboard —
-   * every member is a real account (that's how they can send receipts).
+   * Invite someone into the circle by Gmail. Emails them the invite either way:
+   * if they already have a BookAm account they accept from their dashboard; if
+   * not, the email links them to sign up, and the invite is claimed when they
+   * register with that same Gmail. Every member ends up a real account (that's
+   * how they upload their own receipts).
    */
   async invite(
     circleId: string,
     coordinatorId: string,
     dto: InviteMemberDto,
   ): Promise<MemberInfo> {
-    await this.circles.assertOwned(circleId, coordinatorId);
+    const circle = await this.circles.assertOwned(circleId, coordinatorId);
     const email = dto.email.trim().toLowerCase();
+    const coordinator = await this.prisma.user.findUniqueOrThrow({
+      where: { id: coordinatorId },
+    });
     const user = await this.prisma.user.findUnique({ where: { email } });
-    if (!user) {
-      throw new NotFoundException(
-        'No BookAm account has this email — ask them to sign up first, then invite again',
-      );
-    }
-    await this.assertNotAlreadyInCircle(circleId, user.id);
+    await this.assertNotAlreadyInvited(circleId, email, user?.id ?? null);
+
     const membership = await this.prisma.membership.create({
       data: {
         circleId,
-        userId: user.id,
-        name: user.name,
-        phone: user.phone,
+        userId: user?.id ?? null,
+        name: user?.name ?? email.split('@')[0],
+        phone: user?.phone ?? null,
+        invitedEmail: email,
         status: 'INVITED',
       },
     });
-    return this.circles.toMemberInfo(membership, new Set(), user.email);
+
+    // Best-effort email — never fail the invite if the mail can't be sent.
+    await this.sendInviteEmail(
+      email,
+      circle.name,
+      coordinator.name,
+      !!user,
+    ).catch(() => undefined);
+
+    return this.circles.toMemberInfo(membership, new Set(), email);
+  }
+
+  private async sendInviteEmail(
+    to: string,
+    circleName: string,
+    coordinatorName: string,
+    hasAccount: boolean,
+  ): Promise<void> {
+    const base = frontendUrl();
+    const body = hasAccount
+      ? `${coordinatorName} has invited you to join the circle "${circleName}" on BookAm.\n\n` +
+        `Open your dashboard to accept the invite:\n${base}/me\n\n` +
+        `You'll see it under "Circle invites".`
+      : `${coordinatorName} has invited you to join the circle "${circleName}" on BookAm.\n\n` +
+        `You don't have a BookAm account yet. Sign up with THIS Gmail (${to}) — ` +
+        `you can use "Continue with Google" — and the invite will be waiting for you:\n${base}/register\n\n` +
+        `Once you sign in, accept it under "Circle invites".`;
+    await this.email.send(
+      to,
+      `You're invited to ${circleName} on BookAm`,
+      body,
+    );
   }
 
   /**
@@ -335,15 +374,17 @@ export class MembersService {
     return circle;
   }
 
-  private async assertNotAlreadyInCircle(
+  /** Guard against a duplicate invite/membership — by account and by Gmail. */
+  private async assertNotAlreadyInvited(
     circleId: string,
-    userId: string,
+    email: string,
+    userId: string | null,
   ): Promise<void> {
     const existing = await this.prisma.membership.findFirst({
       where: {
         circleId,
-        userId,
         status: { in: ['INVITED', 'REQUESTED', 'ACTIVE'] },
+        OR: [{ invitedEmail: email }, ...(userId ? [{ userId }] : [])],
       },
     });
     if (existing) {

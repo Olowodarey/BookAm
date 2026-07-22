@@ -243,6 +243,7 @@ export class MemberService {
       coordinatorFeePercent: circle.coordinatorFeePercent,
       memberTarget: circle.memberTarget,
       cycleIndex: state?.cycle.index ?? null,
+      dueAt: state?.cycle.dueAt ?? null,
       collector: state?.collector
         ? {
             name: state.collector.name,

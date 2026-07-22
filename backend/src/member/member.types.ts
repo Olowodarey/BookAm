@@ -140,6 +140,8 @@ export interface MemberCircleDetail {
   coordinatorFeePercent: number;
   memberTarget: number;
   cycleIndex: number | null;
+  /** This round's contribution deadline (WAT), or null if none set. */
+  dueAt: Date | null;
   collector: RotationSlot | null;
   /** Who collects after the current turn, in order (excludes the collector). */
   upcoming: RotationSlot[];

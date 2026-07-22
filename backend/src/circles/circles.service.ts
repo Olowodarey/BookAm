@@ -114,15 +114,21 @@ export class CirclesService {
     await this.openCycleState(membership.circle);
   }
 
-  /** The account email for a membership, keyed by membership id. */
+  /** The email for a membership (account email, or the invited Gmail). */
   private async memberEmails(
     circleId: string,
   ): Promise<Map<string, string | null>> {
     const rows = await this.prisma.membership.findMany({
       where: { circleId },
-      select: { id: true, user: { select: { email: true } } },
+      select: {
+        id: true,
+        invitedEmail: true,
+        user: { select: { email: true } },
+      },
     });
-    return new Map(rows.map((r) => [r.id, r.user?.email ?? null]));
+    return new Map(
+      rows.map((r) => [r.id, r.user?.email ?? r.invitedEmail ?? null]),
+    );
   }
 
   /**
@@ -206,6 +212,7 @@ export class CirclesService {
     coordinatorId: string,
     dto: CreateCircleDto,
   ): Promise<CircleSummary> {
+    const startDate = dto.startDate ? new Date(dto.startDate) : null;
     const circle = await this.prisma.circle.create({
       data: {
         name: dto.name,
@@ -213,16 +220,22 @@ export class CirclesService {
         frequency: dto.frequency,
         memberTarget: dto.memberTarget,
         coordinatorFeePercent: dto.feePercent ?? 0,
+        startDate,
         coordinatorId,
       },
     });
     await this.prisma.cycle.create({
-      data: { circleId: circle.id, index: 1 },
+      data: {
+        circleId: circle.id,
+        index: 1,
+        ...(startDate ? { startedAt: startDate } : {}),
+        ...(dto.firstDueAt ? { dueAt: new Date(dto.firstDueAt) } : {}),
+      },
     });
     return this.summarize(circle);
   }
 
-  /** Coordinator edits circle settings (name, fee percent). */
+  /** Coordinator edits circle settings (name, fee, schedule). */
   async update(
     circleId: string,
     coordinatorId: string,
@@ -236,8 +249,24 @@ export class CirclesService {
         ...(dto.feePercent !== undefined
           ? { coordinatorFeePercent: dto.feePercent }
           : {}),
+        ...(dto.startDate !== undefined
+          ? { startDate: new Date(dto.startDate) }
+          : {}),
       },
     });
+    // Adjusting the deadline applies to the current open round.
+    if (dto.dueAt !== undefined) {
+      const open = await this.prisma.cycle.findFirst({
+        where: { circleId, status: 'OPEN' },
+        orderBy: { index: 'desc' },
+      });
+      if (open) {
+        await this.prisma.cycle.update({
+          where: { id: open.id },
+          data: { dueAt: new Date(dto.dueAt) },
+        });
+      }
+    }
     return this.summarize(circle);
   }
 
@@ -273,6 +302,7 @@ export class CirclesService {
         index: state.cycle.index,
         status: state.cycle.status,
         startedAt: state.cycle.startedAt,
+        dueAt: state.cycle.dueAt,
         collector: state.collector
           ? this.toMemberInfo(state.collector, collectedIds)
           : null,
@@ -300,6 +330,7 @@ export class CirclesService {
         memberTarget: circle.memberTarget,
         activeMembers: members.length,
         coordinatorFeePercent: circle.coordinatorFeePercent,
+        startDate: circle.startDate,
         currentCycleIndex: cycleInfo?.index ?? null,
         paidCount,
         owingCount,
@@ -353,6 +384,7 @@ export class CirclesService {
       memberTarget: circle.memberTarget,
       activeMembers,
       coordinatorFeePercent: circle.coordinatorFeePercent,
+      startDate: circle.startDate,
       currentCycleIndex: state?.cycle.index ?? null,
       paidCount,
       owingCount,

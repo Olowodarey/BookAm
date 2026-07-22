@@ -138,6 +138,7 @@ export class AuthService {
     if (user.status === 'SUSPENDED') {
       throw new ForbiddenException('This account is suspended');
     }
+    await this.claimEmailInvites(user);
     return this.issueSession(user);
   }
 
@@ -203,6 +204,7 @@ export class AuthService {
                 emailVerifiedAt: existing.emailVerifiedAt ?? new Date(),
               },
             });
+      await this.claimEmailInvites(user);
       return this.issueSession(user);
     }
 
@@ -215,6 +217,7 @@ export class AuthService {
         emailVerifiedAt: new Date(),
       },
     });
+    await this.claimEmailInvites(created);
     return this.issueSession(created);
   }
 
@@ -372,6 +375,18 @@ export class AuthService {
     await this.prisma.membership.updateMany({
       where: { phone: user.phone, userId: null },
       data: { userId: user.id },
+    });
+  }
+
+  /**
+   * Coordinators can invite a Gmail before it has an account. Once someone owns
+   * that Gmail (verified sign-up or Google sign-in), those INVITED memberships
+   * become theirs — they then show up under "Circle invites" to accept.
+   */
+  private async claimEmailInvites(user: User): Promise<void> {
+    await this.prisma.membership.updateMany({
+      where: { invitedEmail: user.email, userId: null, status: 'INVITED' },
+      data: { userId: user.id, name: user.name },
     });
   }
 

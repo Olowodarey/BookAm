@@ -2,7 +2,12 @@
 
 import { useState } from "react";
 import { useMemberCircle } from "./layout";
-import { formatNaira, FREQUENCY_LABEL, memberApi } from "@/lib/member/api";
+import {
+  formatDeadline,
+  formatNaira,
+  FREQUENCY_LABEL,
+  memberApi,
+} from "@/lib/member/api";
 import {
   Card,
   EmptyState,
@@ -38,6 +43,18 @@ export default function MemberCircleOverviewPage() {
         </Card>
       ) : (
         <>
+          {detail.dueAt ? (
+            <div className="mb-6 rounded-xl border border-gold bg-gold/10 px-4 py-3">
+              <span className="font-mono text-[11px] font-bold uppercase tracking-wide text-green-deep">
+                Pay before
+              </span>
+              <span className="ml-2 font-semibold text-ink">
+                {formatDeadline(detail.dueAt)}
+              </span>
+              <span className="ml-1 text-xs text-muted">(WAT)</span>
+            </div>
+          ) : null}
+
           <CollectorHero />
           <MyContributionCard />
 

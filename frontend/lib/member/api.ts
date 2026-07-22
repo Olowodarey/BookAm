@@ -13,7 +13,13 @@ import type {
   VoteValue,
 } from "./types";
 
-export { formatDate, formatNaira } from "../admin/api";
+export {
+  formatDate,
+  formatDeadline,
+  formatNaira,
+  isoToWatInput,
+  watInputToISO,
+} from "../admin/api";
 export { FREQUENCY_LABEL } from "../dashboard/api";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";

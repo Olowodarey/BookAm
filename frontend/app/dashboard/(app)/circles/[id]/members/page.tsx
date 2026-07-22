@@ -476,9 +476,10 @@ function InviteMemberModal({
           />
         </Field>
         <p className="text-xs text-muted">
-          Invite by Gmail — they must already have a BookAm account (that&apos;s
-          how they upload their own receipts). They&apos;ll get the invite on
-          their dashboard and join the rotation once they accept.
+          We&apos;ll email this Gmail an invite. If they already have a BookAm
+          account, it shows on their dashboard to accept; if not, the email
+          links them to sign up with this Gmail first. They join the rotation
+          once they accept.
         </p>
         <div className="flex justify-end gap-2">
           <Button

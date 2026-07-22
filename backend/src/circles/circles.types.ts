@@ -30,6 +30,8 @@ export interface CircleSummary {
   activeMembers: number;
   /** The coordinator's cut as a whole percent of the pot (0–100). */
   coordinatorFeePercent: number;
+  /** When the first round begins (WAT), or null on older circles. */
+  startDate: Date | null;
   currentCycleIndex: number | null;
   paidCount: number;
   owingCount: number;
@@ -114,6 +116,8 @@ export interface ActiveCycleInfo {
   index: number;
   status: CycleStatus;
   startedAt: Date;
+  /** This round's contribution deadline (WAT), or null if none set. */
+  dueAt: Date | null;
   collector: MemberInfo | null;
   /** The collector's bank details (from their profile), if they set them. */
   collectorAccount: PayoutAccount | null;

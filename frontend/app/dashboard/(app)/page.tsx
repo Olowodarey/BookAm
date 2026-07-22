@@ -8,6 +8,7 @@ import {
   coordinatorApi,
   formatNaira,
   FREQUENCY_LABEL,
+  watInputToISO,
 } from "@/lib/dashboard/api";
 import type { CircleFrequency, CircleSummary } from "@/lib/dashboard/types";
 import {
@@ -138,8 +139,17 @@ function CreateCircleModal({
   const [frequency, setFrequency] = useState<CircleFrequency>("WEEKLY");
   const [memberTarget, setMemberTarget] = useState("");
   const [feePercent, setFeePercent] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [firstDueAt, setFirstDueAt] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  const deadlineHint =
+    frequency === "DAILY"
+      ? "Each round's deadline moves forward one day."
+      : frequency === "WEEKLY"
+        ? "Each round's deadline moves forward one week."
+        : "Each round's deadline moves forward one month.";
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -152,6 +162,8 @@ function CreateCircleModal({
         frequency,
         memberTarget: Number(memberTarget),
         feePercent: feePercent.trim() === "" ? 0 : Number(feePercent),
+        ...(startDate ? { startDate: watInputToISO(startDate) } : {}),
+        ...(firstDueAt ? { firstDueAt: watInputToISO(firstDueAt) } : {}),
       });
       onDone();
       router.push(`/dashboard/circles/${created.id}/members`);
@@ -233,6 +245,29 @@ function CreateCircleModal({
             />
           </Field>
         </div>
+
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <Field label="Start date">
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className={inputClass}
+            />
+          </Field>
+          <Field label="First round deadline (WAT)">
+            <input
+              type="datetime-local"
+              value={firstDueAt}
+              onChange={(e) => setFirstDueAt(e.target.value)}
+              className={inputClass}
+            />
+          </Field>
+        </div>
+        <p className="text-xs text-muted">
+          Times are West Africa Time (WAT). {deadlineHint} You can adjust any
+          round&apos;s deadline later.
+        </p>
 
         <p className="text-xs text-muted">
           Your fee is your cut of each payout — every member sees it, and the

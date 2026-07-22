@@ -1,5 +1,6 @@
 import { Type } from 'class-transformer';
 import {
+  IsDateString,
   IsEnum,
   IsInt,
   IsNotEmpty,
@@ -38,6 +39,16 @@ export class CreateCircleDto {
   @Min(0)
   @Max(100)
   feePercent?: number;
+
+  /** When the first round begins (ISO instant; the client sends WAT). */
+  @IsOptional()
+  @IsDateString()
+  startDate?: string;
+
+  /** Deadline for the first round (ISO instant). */
+  @IsOptional()
+  @IsDateString()
+  firstDueAt?: string;
 }
 
 /** Coordinator settings a circle allows changing after creation. */
@@ -54,4 +65,13 @@ export class UpdateCircleDto {
   @Min(0)
   @Max(100)
   feePercent?: number;
+
+  @IsOptional()
+  @IsDateString()
+  startDate?: string;
+
+  /** Adjust the current open round's deadline. */
+  @IsOptional()
+  @IsDateString()
+  dueAt?: string;
 }

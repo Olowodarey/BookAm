@@ -191,6 +191,9 @@ model Circle {
   // The coordinator's cut, as a whole percent of the pot (0–100). Each payout
   // to the collecting member is the pot MINUS this fee. Shown to all members.
   coordinatorFeePercent   Int             @default(0)
+  // When the circle's first round begins (real instant; deadlines are shown in
+  // WAT). Null on older circles created before scheduling existed.
+  startDate               DateTime?
   // Random token for the shareable "join this circle" link. Null = link off.
   inviteToken             String?         @unique
   coordinator             User            @relation("Coordinator", fields: [coordinatorId], references: [id])
@@ -209,12 +212,16 @@ model Membership {
   id        String           @id @default(cuid())
   circle    Circle           @relation(fields: [circleId], references: [id])
   circleId  String
-  // Every member is a real BookAm account (invited by email or via the link),
-  // so userId is always set now. name/phone are copied from their profile.
+  // Members are real BookAm accounts. userId links once they have one; a
+  // coordinator can invite a Gmail that has no account yet (userId null), and
+  // the invite is claimed when that person signs up with the same Gmail.
   user      User?            @relation("MemberUser", fields: [userId], references: [id])
   userId    String?
   name      String
   phone     String?
+  // The Gmail this membership was invited by — used to email the invite and
+  // to claim it on sign-up. Set on every email invite (account or not).
+  invitedEmail String?
   // 1-based slot in the payout rotation, assigned when the membership becomes
   // ACTIVE. Pending (INVITED/REQUESTED) rows sit at 0 until then. Uniqueness
   // among ACTIVE members is enforced in the service layer.
@@ -231,6 +238,7 @@ model Membership {
 
   @@index([circleId])
   @@index([userId])
+  @@index([invitedEmail])
 }
 
 model Cycle {
@@ -244,6 +252,9 @@ model Cycle {
   collector   Membership? @relation("CycleCollector", fields: [collectorId], references: [id])
   collectorId String?
   startedAt   DateTime    @default(now())
+  // Contribution deadline for this round (real instant, shown in WAT). Each new
+  // round advances it by the circle's frequency (daily +1d, weekly +7d, +1mo).
+  dueAt       DateTime?
   completedAt DateTime?
 
   contributions Contribution[]

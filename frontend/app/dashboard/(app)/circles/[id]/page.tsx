@@ -6,8 +6,11 @@ import { useCircle } from "./layout";
 import {
   coordinatorApi,
   formatDate,
+  formatDeadline,
   formatNaira,
   FREQUENCY_LABEL,
+  isoToWatInput,
+  watInputToISO,
 } from "@/lib/dashboard/api";
 import type { ReminderInfo } from "@/lib/dashboard/types";
 import type { AppealInfo } from "@/lib/member/types";
@@ -117,6 +120,18 @@ export default function CircleOverviewPage() {
             />
           </div>
 
+          {cycle.dueAt ? (
+            <div className="mb-6 rounded-xl border border-gold bg-gold/10 px-4 py-3">
+              <span className="font-mono text-[11px] font-bold uppercase tracking-wide text-green-deep">
+                Round {cycle.index} deadline
+              </span>
+              <span className="ml-2 font-semibold text-ink">
+                {formatDeadline(cycle.dueAt)}
+              </span>
+              <span className="ml-1 text-xs text-muted">(WAT)</span>
+            </div>
+          ) : null}
+
           {cycle.contributions.length === 0 ? (
             <Card>
               <EmptyState
@@ -175,6 +190,17 @@ function CircleSettingsCard() {
 
   const feeChanged = Number(fee) !== circle.coordinatorFeePercent;
 
+  const currentDue = detail.cycle?.dueAt ?? null;
+  const [due, setDue] = useState(currentDue ? isoToWatInput(currentDue) : "");
+  const [dueSaved, setDueSaved] = useState(false);
+  const [seenDue, setSeenDue] = useState(currentDue);
+  if (seenDue !== currentDue) {
+    setSeenDue(currentDue);
+    setDue(currentDue ? isoToWatInput(currentDue) : "");
+  }
+  const dueChanged =
+    due !== "" && (!currentDue || watInputToISO(due) !== currentDue);
+
   const saveFee = async () => {
     setBusy(true);
     setError(null);
@@ -185,6 +211,23 @@ function CircleSettingsCard() {
       await refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not save fee");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const saveDue = async () => {
+    setBusy(true);
+    setError(null);
+    setDueSaved(false);
+    try {
+      await coordinatorApi.updateCircle(circle.id, {
+        dueAt: watInputToISO(due),
+      });
+      setDueSaved(true);
+      await refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not save deadline");
     } finally {
       setBusy(false);
     }
@@ -243,6 +286,39 @@ function CircleSettingsCard() {
             Every member sees this. The collector receives the pot minus your
             fee.
           </p>
+
+          {detail.cycle ? (
+            <div className="mt-4">
+              <div className="flex items-end gap-2">
+                <Field label={`Round ${detail.cycle.index} deadline (WAT)`}>
+                  <input
+                    type="datetime-local"
+                    value={due}
+                    onChange={(e) => {
+                      setDue(e.target.value);
+                      setDueSaved(false);
+                    }}
+                    className={inputClass}
+                  />
+                </Field>
+                <Button
+                  onClick={() => void saveDue()}
+                  disabled={busy || !dueChanged}
+                >
+                  {busy ? "Saving…" : "Save deadline"}
+                </Button>
+                {dueSaved && !dueChanged ? (
+                  <span className="pb-2 text-sm font-semibold text-green">
+                    Saved ✓
+                  </span>
+                ) : null}
+              </div>
+              <p className="mt-1 text-xs text-muted">
+                Adjusts this round only; later rounds keep advancing by the
+                frequency.
+              </p>
+            </div>
+          ) : null}
         </div>
 
         <div className="text-right">

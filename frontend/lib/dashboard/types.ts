@@ -50,6 +50,8 @@ export interface CircleSummary {
   activeMembers: number;
   /** The coordinator's cut as a whole percent of the pot (0–100). */
   coordinatorFeePercent: number;
+  /** When the first round begins (ISO, WAT), or null on older circles. */
+  startDate: string | null;
   currentCycleIndex: number | null;
   paidCount: number;
   owingCount: number;
@@ -119,6 +121,8 @@ export interface ActiveCycleInfo {
   index: number;
   status: CycleStatus;
   startedAt: string;
+  /** This round's contribution deadline (ISO, WAT), or null. */
+  dueAt: string | null;
   collector: MemberInfo | null;
   /** The collector's bank details (from their profile), if they set them. */
   collectorAccount: PayoutAccount | null;
@@ -186,4 +190,8 @@ export interface CreateCircleInput {
   memberTarget: number;
   /** The coordinator's cut as a whole percent of the pot (0–100). */
   feePercent?: number;
+  /** ISO instant (WAT) when the first round begins. */
+  startDate?: string;
+  /** ISO instant for the first round's deadline. */
+  firstDueAt?: string;
 }

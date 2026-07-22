@@ -17,7 +17,13 @@ import type {
 // Type-only import; appeals are shared domain between member + coordinator.
 import type { AppealInfo } from "../member/types";
 
-export { formatDate, formatNaira } from "../admin/api";
+export {
+  formatDate,
+  formatDeadline,
+  formatNaira,
+  isoToWatInput,
+  watInputToISO,
+} from "../admin/api";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 // Separate from the admin token so an alajo and the platform owner can be
@@ -147,7 +153,12 @@ export const coordinatorApi = {
   // Edit circle settings (name, coordinator fee %).
   updateCircle: (
     id: string,
-    input: { name?: string; feePercent?: number },
+    input: {
+      name?: string;
+      feePercent?: number;
+      startDate?: string;
+      dueAt?: string;
+    },
   ) =>
     request<CircleSummary>(`/circles/${id}`, { method: "PATCH", body: input }),
   // Coordinator opts in/out of their own circle's rotation.

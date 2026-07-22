@@ -11,6 +11,7 @@ import {
   type ReceiptFile,
 } from './receipt-storage.service';
 import { resolveReceiptAmount } from './receipt-amount';
+import { advanceDeadline } from './schedule';
 import type { CompletePayoutResult, PayoutInfo } from './circles.types';
 
 @Injectable()
@@ -112,11 +113,17 @@ export class PayoutsService {
         data: { status: 'COMPLETED', completedAt: now },
       });
       if (next) {
+        // Carry the schedule forward: the new round's deadline advances by the
+        // circle's frequency from this round's deadline.
+        const nextDueAt = state.cycle.dueAt
+          ? advanceDeadline(state.cycle.dueAt, circle.frequency)
+          : null;
         await tx.cycle.create({
           data: {
             circleId,
             index: state.cycle.index + 1,
             collectorId: next.id,
+            ...(nextDueAt ? { dueAt: nextDueAt } : {}),
           },
         });
       } else {
