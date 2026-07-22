@@ -88,14 +88,15 @@ export default function LoginPage() {
           <h1 className="font-display text-lg font-bold">Welcome back</h1>
           {error ? <ErrorNote message={error} /> : null}
 
-          <Field label="Email address">
+          <Field label="Gmail address">
             <input
               type="email"
               required
               autoComplete="username"
+              pattern="[^@\s]+@gmail\.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@example.com"
+              placeholder="you@gmail.com"
               className={inputClass}
             />
           </Field>

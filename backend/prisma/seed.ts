@@ -9,7 +9,7 @@ const daysFromNow = (days: number) =>
   new Date(Date.now() + days * 24 * 60 * 60 * 1000);
 
 async function main() {
-  const adminEmail = process.env.SEED_ADMIN_EMAIL ?? 'admin@bookam.test';
+  const adminEmail = process.env.SEED_ADMIN_EMAIL ?? 'admin@gmail.com';
   const adminPhone = process.env.SEED_ADMIN_PHONE ?? '+2348000000001';
   const adminPassword = process.env.SEED_ADMIN_PASSWORD ?? 'admin1234';
 
@@ -76,37 +76,37 @@ async function main() {
   const demoUsers = [
     {
       phone: '+2348011111111',
-      email: 'iya.basira@bookam.test',
+      email: 'iya.basira@gmail.com',
       name: 'Iya Basira',
       role: 'COORDINATOR',
     },
     {
       phone: '+2348022222222',
-      email: 'chinedu.okafor@bookam.test',
+      email: 'chinedu.okafor@gmail.com',
       name: 'Chinedu Okafor',
       role: 'COORDINATOR',
     },
     {
       phone: '+2348033333333',
-      email: 'amina.yusuf@bookam.test',
+      email: 'amina.yusuf@gmail.com',
       name: 'Amina Yusuf',
       role: 'MEMBER',
     },
     {
       phone: '+2348044444444',
-      email: 'tunde.adebayo@bookam.test',
+      email: 'tunde.adebayo@gmail.com',
       name: 'Tunde Adebayo',
       role: 'MEMBER',
     },
     {
       phone: '+2348055555555',
-      email: 'ngozi.eze@bookam.test',
+      email: 'ngozi.eze@gmail.com',
       name: 'Ngozi Eze',
       role: 'MEMBER',
     },
     {
       phone: '+2348066666666',
-      email: 'musa.ibrahim@bookam.test',
+      email: 'musa.ibrahim@gmail.com',
       name: 'Musa Ibrahim',
       role: 'MEMBER',
     },
@@ -130,10 +130,10 @@ async function main() {
     });
   }
   console.log(
-    `Coordinator ready: iya.basira@bookam.test (password: ${coordinatorPassword})`,
+    `Coordinator ready: iya.basira@gmail.com (password: ${coordinatorPassword})`,
   );
   console.log(
-    `Member ready: amina.yusuf@bookam.test (password: ${memberPassword})`,
+    `Member ready: amina.yusuf@gmail.com (password: ${memberPassword})`,
   );
 
   if ((await prisma.collectorApplication.count()) === 0) {
@@ -312,13 +312,13 @@ async function main() {
   // tried with a distinct login: a collector who owns a fresh circle, and a
   // contributor who belongs to it.
   const testCollectorEmail =
-    process.env.SEED_TEST_COLLECTOR_EMAIL ?? 'baba.kazeem@bookam.test';
+    process.env.SEED_TEST_COLLECTOR_EMAIL ?? 'baba.kazeem@gmail.com';
   const testCollectorPhone =
     process.env.SEED_TEST_COLLECTOR_PHONE ?? '+2348090000001';
   const testCollectorPassword =
     process.env.SEED_TEST_COLLECTOR_PASSWORD ?? 'collector5678';
   const testMemberEmail =
-    process.env.SEED_TEST_MEMBER_EMAIL ?? 'chika.obi@bookam.test';
+    process.env.SEED_TEST_MEMBER_EMAIL ?? 'chika.obi@gmail.com';
   const testMemberPhone =
     process.env.SEED_TEST_MEMBER_PHONE ?? '+2348090000002';
   const testMemberPassword =

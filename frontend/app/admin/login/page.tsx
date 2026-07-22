@@ -55,14 +55,15 @@ export default function AdminLoginPage() {
 
           {error ? <ErrorNote message={error} /> : null}
 
-          <Field label="Email address">
+          <Field label="Gmail address">
             <input
               type="email"
               required
               autoComplete="username"
+              pattern="[^@\s]+@gmail\.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="admin@bookam.test"
+              placeholder="admin@gmail.com"
               className={inputClass}
             />
           </Field>
