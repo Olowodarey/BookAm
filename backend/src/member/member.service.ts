@@ -19,6 +19,7 @@ import {
 } from '../circles/receipt-storage.service';
 import { resolveReceiptAmount } from '../circles/receipt-amount';
 import type {
+  CircleInvite,
   MemberCircleDetail,
   MemberPayout,
   MemberRow,
@@ -109,6 +110,63 @@ export class MemberService {
         };
       }),
     );
+  }
+
+  /** Circles this member has been invited to and hasn't accepted yet. */
+  async myInvites(userId: string): Promise<CircleInvite[]> {
+    const invites = await this.prisma.membership.findMany({
+      where: { userId, status: 'INVITED' },
+      include: { circle: { include: { coordinator: true } } },
+      orderBy: { createdAt: 'asc' },
+    });
+    return invites
+      .filter((m) => m.circle.status === 'ACTIVE')
+      .map((m) => ({
+        membershipId: m.id,
+        circleId: m.circleId,
+        circleName: m.circle.name,
+        amountNaira: m.circle.contributionAmountNaira,
+        frequency: m.circle.frequency,
+        coordinatorName: m.circle.coordinator.name,
+        invitedAt: m.createdAt,
+      }));
+  }
+
+  /** Accept an invite (INVITED → ACTIVE, joins the rotation). */
+  async acceptInvite(
+    userId: string,
+    membershipId: string,
+  ): Promise<{ accepted: true; circleName: string }> {
+    const membership = await this.myPendingInvite(userId, membershipId);
+    await this.circles.activate(membership.id);
+    const circle = await this.prisma.circle.findUniqueOrThrow({
+      where: { id: membership.circleId },
+    });
+    return { accepted: true, circleName: circle.name };
+  }
+
+  /** Decline an invite — drops the pending row. */
+  async declineInvite(
+    userId: string,
+    membershipId: string,
+  ): Promise<{ declined: true }> {
+    const membership = await this.myPendingInvite(userId, membershipId);
+    await this.prisma.membership.delete({ where: { id: membership.id } });
+    return { declined: true };
+  }
+
+  private async myPendingInvite(userId: string, membershipId: string) {
+    const membership = await this.prisma.membership.findUnique({
+      where: { id: membershipId },
+    });
+    if (
+      !membership ||
+      membership.userId !== userId ||
+      membership.status !== 'INVITED'
+    ) {
+      throw new NotFoundException('No matching invite');
+    }
+    return membership;
   }
 
   async circleDetail(

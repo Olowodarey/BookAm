@@ -8,7 +8,7 @@ import { randomBytes } from 'crypto';
 import type { Circle } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CirclesService } from './circles.service';
-import type { AddMemberDto, JoinCircleDto } from './dto/member.dto';
+import type { InviteMemberDto } from './dto/member.dto';
 import type {
   InviteLinkResponse,
   InvitePreview,
@@ -22,15 +22,81 @@ export class MembersService {
     private readonly circles: CirclesService,
   ) {}
 
-  async add(
+  /**
+   * Invite an existing BookAm account into the circle by email. Creates an
+   * INVITED membership the person then accepts from their own dashboard —
+   * every member is a real account (that's how they can send receipts).
+   */
+  async invite(
     circleId: string,
     coordinatorId: string,
-    dto: AddMemberDto,
+    dto: InviteMemberDto,
   ): Promise<MemberInfo> {
     await this.circles.assertOwned(circleId, coordinatorId);
-    const membership = await this.createMembership(circleId, dto);
+    const email = dto.email.trim().toLowerCase();
+    const user = await this.prisma.user.findUnique({ where: { email } });
+    if (!user) {
+      throw new NotFoundException(
+        'No BookAm account has this email — ask them to sign up first, then invite again',
+      );
+    }
+    await this.assertNotAlreadyInCircle(circleId, user.id);
+    const membership = await this.prisma.membership.create({
+      data: {
+        circleId,
+        userId: user.id,
+        name: user.name,
+        phone: user.phone,
+        status: 'INVITED',
+      },
+    });
+    return this.circles.toMemberInfo(membership, new Set(), user.email);
+  }
+
+  /** Coordinator approves a join request (REQUESTED → ACTIVE, gets a slot). */
+  async approveRequest(
+    circleId: string,
+    coordinatorId: string,
+    membershipId: string,
+  ): Promise<MemberInfo> {
+    await this.circles.assertOwned(circleId, coordinatorId);
+    const membership = await this.pendingInCircle(
+      circleId,
+      membershipId,
+      'REQUESTED',
+    );
+    await this.circles.activate(membership.id);
+    const updated = await this.prisma.membership.findUniqueOrThrow({
+      where: { id: membership.id },
+      include: { user: { select: { email: true } } },
+    });
     const collectedIds = await this.circles.collectedMembershipIds(circleId);
-    return this.circles.toMemberInfo(membership, collectedIds);
+    return this.circles.toMemberInfo(
+      updated,
+      collectedIds,
+      updated.user?.email ?? null,
+    );
+  }
+
+  /** Reject a join request or cancel an invite — drops the pending row. */
+  async removePending(
+    circleId: string,
+    coordinatorId: string,
+    membershipId: string,
+  ): Promise<{ removed: true }> {
+    await this.circles.assertOwned(circleId, coordinatorId);
+    const membership = await this.prisma.membership.findUnique({
+      where: { id: membershipId },
+    });
+    if (
+      !membership ||
+      membership.circleId !== circleId ||
+      (membership.status !== 'REQUESTED' && membership.status !== 'INVITED')
+    ) {
+      throw new NotFoundException('No pending request or invite to remove');
+    }
+    await this.prisma.membership.delete({ where: { id: membershipId } });
+    return { removed: true };
   }
 
   async remove(
@@ -86,13 +152,16 @@ export class MembersService {
       ),
     );
 
-    const [members, collectedIds] = await Promise.all([
+    const [members, collectedIds, emails] = await Promise.all([
       this.circles.activeMembers(circleId),
       this.circles.collectedMembershipIds(circleId),
+      this.circleMemberEmails(circleId),
     ]);
     // The rotation changed, so the open cycle's collector may have too.
     await this.circles.openCycleState(circle);
-    return members.map((m) => this.circles.toMemberInfo(m, collectedIds));
+    return members.map((m) =>
+      this.circles.toMemberInfo(m, collectedIds, emails.get(m.id) ?? null),
+    );
   }
 
   async generateInvite(
@@ -125,8 +194,9 @@ export class MembersService {
     return `${base}/join/${token}`;
   }
 
-  // ---- Public invite flow (no auth — the token is the credential) ---------
+  // ---- Invite link flow ----------------------------------------------------
 
+  /** Public preview of what an invite link leads to (no auth needed). */
   async preview(token: string): Promise<InvitePreview> {
     const circle = await this.circleByToken(token);
     const [coordinator, activeMembers] = await Promise.all([
@@ -145,21 +215,48 @@ export class MembersService {
     };
   }
 
-  async join(
+  /**
+   * A signed-in user asks to join via the link. Creates a REQUESTED membership
+   * the coordinator then approves — so nobody joins just by having the link.
+   */
+  async requestJoin(
     token: string,
-    dto: JoinCircleDto,
-  ): Promise<{ joined: true; circleName: string }> {
+    userId: string,
+  ): Promise<{ requested: true; circleName: string }> {
     const circle = await this.circleByToken(token);
-    const activeMembers = await this.prisma.membership.count({
-      where: { circleId: circle.id, status: 'ACTIVE' },
+    const user = await this.prisma.user.findUniqueOrThrow({
+      where: { id: userId },
     });
-    if (circle.memberTarget > 0 && activeMembers >= circle.memberTarget) {
+    const existing = await this.prisma.membership.findFirst({
+      where: {
+        circleId: circle.id,
+        userId,
+        status: { in: ['INVITED', 'REQUESTED', 'ACTIVE'] },
+      },
+    });
+    if (existing) {
+      if (existing.status === 'ACTIVE') {
+        throw new ConflictException('You are already in this circle');
+      }
+      if (existing.status === 'INVITED') {
+        // They were invited — accept it straight away instead of duplicating.
+        await this.circles.activate(existing.id);
+        return { requested: true, circleName: circle.name };
+      }
       throw new ConflictException(
-        'This circle is already full — ask the coordinator for space',
+        'You already have a pending request for this circle',
       );
     }
-    await this.createMembership(circle.id, dto);
-    return { joined: true, circleName: circle.name };
+    await this.prisma.membership.create({
+      data: {
+        circleId: circle.id,
+        userId,
+        name: user.name,
+        phone: user.phone,
+        status: 'REQUESTED',
+      },
+    });
+    return { requested: true, circleName: circle.name };
   }
 
   private async circleByToken(token: string): Promise<Circle> {
@@ -174,35 +271,49 @@ export class MembersService {
     return circle;
   }
 
-  private async createMembership(circleId: string, dto: AddMemberDto) {
-    const duplicate = await this.prisma.membership.findFirst({
-      where: { circleId, phone: dto.phone, status: 'ACTIVE' },
-    });
-    if (duplicate) {
-      throw new ConflictException(
-        `${duplicate.name} is already in this circle with that phone number`,
-      );
-    }
-    // New members go to the back of the rotation; the coordinator can reorder.
-    const max = await this.prisma.membership.aggregate({
-      where: { circleId },
-      _max: { position: true },
-    });
-    return this.prisma.membership.create({
-      data: {
+  private async assertNotAlreadyInCircle(
+    circleId: string,
+    userId: string,
+  ): Promise<void> {
+    const existing = await this.prisma.membership.findFirst({
+      where: {
         circleId,
-        name: dto.name,
-        phone: dto.phone,
-        position: (max._max.position ?? 0) + 1,
-        // Link to an existing BookAm account when the phone matches one.
-        userId:
-          (
-            await this.prisma.user.findUnique({
-              where: { phone: dto.phone },
-              select: { id: true },
-            })
-          )?.id ?? null,
+        userId,
+        status: { in: ['INVITED', 'REQUESTED', 'ACTIVE'] },
       },
     });
+    if (existing) {
+      throw new ConflictException(
+        'That person is already a member of (or invited to) this circle',
+      );
+    }
+  }
+
+  private async pendingInCircle(
+    circleId: string,
+    membershipId: string,
+    status: 'REQUESTED' | 'INVITED',
+  ) {
+    const membership = await this.prisma.membership.findUnique({
+      where: { id: membershipId },
+    });
+    if (
+      !membership ||
+      membership.circleId !== circleId ||
+      membership.status !== status
+    ) {
+      throw new NotFoundException('No matching pending membership');
+    }
+    return membership;
+  }
+
+  private async circleMemberEmails(
+    circleId: string,
+  ): Promise<Map<string, string | null>> {
+    const rows = await this.prisma.membership.findMany({
+      where: { circleId },
+      select: { id: true, user: { select: { email: true } } },
+    });
+    return new Map(rows.map((r) => [r.id, r.user?.email ?? null]));
   }
 }

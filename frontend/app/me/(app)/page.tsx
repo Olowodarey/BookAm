@@ -4,10 +4,16 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useMember } from "@/components/member/MemberShell";
 import { formatNaira, FREQUENCY_LABEL, memberApi } from "@/lib/member/api";
-import type { MyCircleCard, MyCollectorApplication } from "@/lib/member/types";
+import type {
+  CircleInvite,
+  MyCircleCard,
+  MyCollectorApplication,
+} from "@/lib/member/types";
 import {
+  Button,
   Card,
   EmptyState,
+  ErrorNote,
   PageHeader,
   StatusBadge,
 } from "@/components/admin/ui";
@@ -47,6 +53,8 @@ export default function MyCirclesPage() {
         title={`Hello, ${user.name.split(" ")[0]}`}
         subtitle="Everything your circles have recorded — open for you to see, any time."
       />
+
+      <CircleInvites />
 
       {circles.length === 0 ? (
         <Card>
@@ -114,6 +122,103 @@ export default function MyCirclesPage() {
 
       <CollectorApplicationStatus />
     </div>
+  );
+}
+
+/** Pending circle invites — a coordinator added me by email; I accept/decline. */
+function CircleInvites() {
+  const [invites, setInvites] = useState<CircleInvite[]>([]);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    memberApi
+      .myInvites()
+      .catch(() => [])
+      .then((list) => {
+        if (!cancelled) setInvites(list);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (invites.length === 0) return null;
+
+  const accept = async (invite: CircleInvite) => {
+    setBusyId(invite.membershipId);
+    setError(null);
+    try {
+      await memberApi.acceptInvite(invite.membershipId);
+      // Reload so the newly joined circle appears in the list above.
+      window.location.reload();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not accept invite");
+      setBusyId(null);
+    }
+  };
+
+  const decline = async (invite: CircleInvite) => {
+    setBusyId(invite.membershipId);
+    setError(null);
+    try {
+      await memberApi.declineInvite(invite.membershipId);
+      setInvites((prev) =>
+        prev.filter((i) => i.membershipId !== invite.membershipId),
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not decline invite");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  return (
+    <Card className="mb-6 border-gold px-5 py-5">
+      <h2 className="font-display text-lg font-bold">
+        Circle invite{invites.length > 1 ? "s" : ""} 📨
+      </h2>
+      <p className="mt-1 text-sm text-muted">
+        A coordinator added you — accept to join the rotation.
+      </p>
+      {error ? (
+        <div className="mt-3">
+          <ErrorNote message={error} />
+        </div>
+      ) : null}
+      <ul className="mt-3 space-y-2">
+        {invites.map((invite) => (
+          <li
+            key={invite.membershipId}
+            className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-line px-3.5 py-2.5"
+          >
+            <div className="min-w-0">
+              <p className="truncate font-semibold">{invite.circleName}</p>
+              <p className="font-mono text-xs text-muted">
+                {formatNaira(invite.amountNaira)}{" "}
+                {FREQUENCY_LABEL[invite.frequency]} · by {invite.coordinatorName}
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                onClick={() => void accept(invite)}
+                disabled={busyId === invite.membershipId}
+              >
+                Accept
+              </Button>
+              <Button
+                variant="ghost"
+                onClick={() => void decline(invite)}
+                disabled={busyId === invite.membershipId}
+              >
+                Decline
+              </Button>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </Card>
   );
 }
 

@@ -1,10 +1,14 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { CurrentUser } from '../auth/roles';
+import type { SafeUser } from '../auth/auth.types';
 import { MembersService } from './members.service';
-import { JoinCircleDto } from './dto/member.dto';
 
 /**
- * Public endpoints behind the shareable invite link — no auth; the random
- * token (rotatable/revocable by the coordinator) is the credential.
+ * The shareable invite link. Previewing is public (the token is the
+ * credential), but *joining* now requires a signed-in account and only
+ * creates a REQUEST — the coordinator approves it, so nobody joins just by
+ * having the link.
  */
 @Controller('invite')
 export class InviteController {
@@ -15,8 +19,9 @@ export class InviteController {
     return this.members.preview(token);
   }
 
+  @UseGuards(JwtAuthGuard)
   @Post(':token/join')
-  join(@Param('token') token: string, @Body() dto: JoinCircleDto) {
-    return this.members.join(token, dto);
+  requestJoin(@CurrentUser() user: SafeUser, @Param('token') token: string) {
+    return this.members.requestJoin(token, user.id);
   }
 }

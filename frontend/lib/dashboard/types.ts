@@ -25,7 +25,11 @@ export interface PayoutAccount {
 
 export type CircleFrequency = "DAILY" | "WEEKLY" | "MONTHLY";
 export type CircleStatus = "ACTIVE" | "COMPLETED" | "PAUSED";
-export type MembershipStatus = "ACTIVE" | "REMOVED";
+export type MembershipStatus =
+  | "INVITED"
+  | "REQUESTED"
+  | "ACTIVE"
+  | "REMOVED";
 export type CycleStatus = "OPEN" | "COMPLETED";
 export type ContributionStatus =
   | "AWAITING"
@@ -54,7 +58,8 @@ export interface CircleSummary {
 export interface MemberInfo {
   id: string;
   name: string;
-  phone: string;
+  email: string | null;
+  phone: string | null;
   position: number;
   status: MembershipStatus;
   userId: string | null;
@@ -76,7 +81,7 @@ export interface ContributionInfo {
   id: string;
   membershipId: string;
   memberName: string;
-  memberPhone: string;
+  memberPhone: string | null;
   position: number;
   amountNaira: number;
   status: ContributionStatus;
@@ -123,6 +128,10 @@ export interface CircleDetail {
   circle: CircleSummary;
   inviteToken: string | null;
   members: MemberInfo[];
+  /** People who asked to join via the link — coordinator approves/rejects. */
+  pendingRequests: MemberInfo[];
+  /** People the coordinator invited by email — awaiting their acceptance. */
+  pendingInvites: MemberInfo[];
   cycle: ActiveCycleInfo | null;
 }
 
@@ -143,7 +152,7 @@ export interface InvitePreview {
 export interface ReminderRecipient {
   membershipId: string;
   name: string;
-  phone: string;
+  phone: string | null;
   status: ContributionStatus;
 }
 

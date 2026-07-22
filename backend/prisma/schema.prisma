@@ -49,6 +49,11 @@ enum CircleStatus {
 }
 
 enum MembershipStatus {
+  // Coordinator added this account by email; awaiting the member's acceptance.
+  INVITED
+  // Member asked to join via the invite link; awaiting the coordinator's approval.
+  REQUESTED
+  // Accepted/approved — in the rotation with a position.
   ACTIVE
   REMOVED
 }
@@ -201,16 +206,17 @@ model Membership {
   id        String           @id @default(cuid())
   circle    Circle           @relation(fields: [circleId], references: [id])
   circleId  String
-  // Members are usually added by name + phone before they have an account;
-  // userId links them to a real User once they sign up.
+  // Every member is a real BookAm account (invited by email or via the link),
+  // so userId is always set now. name/phone are copied from their profile.
   user      User?            @relation("MemberUser", fields: [userId], references: [id])
   userId    String?
   name      String
-  phone     String
-  // 1-based slot in the payout rotation. Uniqueness among ACTIVE memberships
-  // is enforced in the service layer (removed members keep their last value).
-  position  Int
-  status    MembershipStatus @default(ACTIVE)
+  phone     String?
+  // 1-based slot in the payout rotation, assigned when the membership becomes
+  // ACTIVE. Pending (INVITED/REQUESTED) rows sit at 0 until then. Uniqueness
+  // among ACTIVE members is enforced in the service layer.
+  position  Int              @default(0)
+  status    MembershipStatus @default(INVITED)
   createdAt DateTime         @default(now())
   updatedAt DateTime         @updatedAt
 

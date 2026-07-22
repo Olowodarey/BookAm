@@ -1,5 +1,7 @@
 import type {
   AppealInfo,
+  CircleInvite,
+  InvitePreview,
   LoginResponse,
   MemberCircleDetail,
   MyCircleCard,
@@ -140,6 +142,27 @@ export const memberApi = {
   myCircles: () => request<MyCircleCard[]>("/member/circles"),
   circleDetail: (circleId: string) =>
     request<MemberCircleDetail>(`/member/circles/${circleId}`),
+
+  // Circle invites (coordinator invited me by email → I accept/decline)
+  myInvites: () => request<CircleInvite[]>("/member/invites"),
+  acceptInvite: (membershipId: string) =>
+    request<{ accepted: true; circleName: string }>(
+      `/member/invites/${membershipId}/accept`,
+      { method: "POST" },
+    ),
+  declineInvite: (membershipId: string) =>
+    request<{ declined: true }>(`/member/invites/${membershipId}`, {
+      method: "DELETE",
+    }),
+
+  // Invite link: preview is public; requesting to join needs me signed in.
+  invitePreview: (token: string) =>
+    request<InvitePreview>(`/invite/${token}`),
+  requestJoinCircle: (token: string) =>
+    request<{ requested: true; circleName: string }>(
+      `/invite/${token}/join`,
+      { method: "POST" },
+    ),
 
   // My one write action: my own receipt for the open round. amountNaira lets
   // me record a part-payment (bit by bit); omit it to pay the full amount.

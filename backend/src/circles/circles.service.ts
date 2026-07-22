@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import type { Circle, Cycle, Membership } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -75,6 +79,49 @@ export class CirclesService {
       where: { circleId, status: 'ACTIVE' },
       orderBy: { position: 'asc' },
     });
+  }
+
+  /**
+   * Move a pending membership (INVITED/REQUESTED) into the rotation: append it
+   * at the next ACTIVE position. Rejects if the circle is already full.
+   */
+  async activate(membershipId: string): Promise<void> {
+    const membership = await this.prisma.membership.findUniqueOrThrow({
+      where: { id: membershipId },
+      include: { circle: true },
+    });
+    const activeCount = await this.prisma.membership.count({
+      where: { circleId: membership.circleId, status: 'ACTIVE' },
+    });
+    if (
+      membership.circle.memberTarget > 0 &&
+      activeCount >= membership.circle.memberTarget
+    ) {
+      throw new ConflictException(
+        'This circle is already full — the coordinator must make room first',
+      );
+    }
+    const max = await this.prisma.membership.aggregate({
+      where: { circleId: membership.circleId, status: 'ACTIVE' },
+      _max: { position: true },
+    });
+    await this.prisma.membership.update({
+      where: { id: membershipId },
+      data: { status: 'ACTIVE', position: (max._max.position ?? 0) + 1 },
+    });
+    // Rotation changed — re-resolve the open cycle's collector if needed.
+    await this.openCycleState(membership.circle);
+  }
+
+  /** The account email for a membership, keyed by membership id. */
+  private async memberEmails(
+    circleId: string,
+  ): Promise<Map<string, string | null>> {
+    const rows = await this.prisma.membership.findMany({
+      where: { circleId },
+      select: { id: true, user: { select: { email: true } } },
+    });
+    return new Map(rows.map((r) => [r.id, r.user?.email ?? null]));
   }
 
   /**
@@ -179,6 +226,11 @@ export class CirclesService {
     const members = state?.members ?? (await this.activeMembers(circle.id));
     const collectedIds =
       state?.collectedIds ?? (await this.collectedMembershipIds(circle.id));
+    const emails = await this.memberEmails(circle.id);
+    const pending = await this.prisma.membership.findMany({
+      where: { circleId: circle.id, status: { in: ['REQUESTED', 'INVITED'] } },
+      orderBy: { createdAt: 'asc' },
+    });
 
     let cycleInfo: ActiveCycleInfo | null = null;
     let paidCount = 0;
@@ -231,7 +283,15 @@ export class CirclesService {
         createdAt: circle.createdAt,
       },
       inviteToken: circle.inviteToken,
-      members: members.map((m) => this.toMemberInfo(m, collectedIds)),
+      members: members.map((m) =>
+        this.toMemberInfo(m, collectedIds, emails.get(m.id) ?? null),
+      ),
+      pendingRequests: pending
+        .filter((m) => m.status === 'REQUESTED')
+        .map((m) => this.toMemberInfo(m, collectedIds, emails.get(m.id) ?? null)),
+      pendingInvites: pending
+        .filter((m) => m.status === 'INVITED')
+        .map((m) => this.toMemberInfo(m, collectedIds, emails.get(m.id) ?? null)),
       cycle: cycleInfo,
     };
   }
@@ -284,10 +344,15 @@ export class CirclesService {
     };
   }
 
-  toMemberInfo(m: Membership, collectedIds: Set<string>): MemberInfo {
+  toMemberInfo(
+    m: Membership,
+    collectedIds: Set<string>,
+    email: string | null = null,
+  ): MemberInfo {
     return {
       id: m.id,
       name: m.name,
+      email,
       phone: m.phone,
       position: m.position,
       status: m.status,

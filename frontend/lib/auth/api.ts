@@ -98,6 +98,12 @@ const MEMBER_TOKEN_KEY = "bookam.member.token";
 const COORDINATOR_TOKEN_KEY = "bookam.coordinator.token";
 const ADMIN_TOKEN_KEY = "bookam.admin.token";
 
+/** True when this browser holds any signed-in BookAm session. */
+export function isSignedIn(): boolean {
+  if (typeof window === "undefined") return false;
+  return window.localStorage.getItem(MEMBER_TOKEN_KEY) !== null;
+}
+
 /** Signs out of every BookAm console in this browser. */
 export function clearSession(): void {
   if (typeof window === "undefined") return;

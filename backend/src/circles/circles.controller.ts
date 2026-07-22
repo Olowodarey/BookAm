@@ -22,7 +22,7 @@ import { AppealsService } from './appeals.service';
 import { MAX_RECEIPT_BYTES, type ReceiptFile } from './receipt-storage.service';
 import { parseAmountField } from './receipt-amount';
 import { CreateCircleDto } from './dto/circle.dto';
-import { AddMemberDto, ReorderMembersDto } from './dto/member.dto';
+import { InviteMemberDto, ReorderMembersDto } from './dto/member.dto';
 import { RejectContributionDto } from './dto/contribution.dto';
 import { DecideAppealDto } from './dto/appeal.dto';
 
@@ -65,13 +65,34 @@ export class CirclesController {
 
   // ---- Members ------------------------------------------------------------
 
-  @Post(':id/members')
-  addMember(
+  /** Invite an existing BookAm account by email (they accept from their app). */
+  @Post(':id/members/invite')
+  inviteMember(
     @CurrentUser() user: SafeUser,
     @Param('id') id: string,
-    @Body() dto: AddMemberDto,
+    @Body() dto: InviteMemberDto,
   ) {
-    return this.members.add(id, user.id, dto);
+    return this.members.invite(id, user.id, dto);
+  }
+
+  /** Approve a join request from the invite link (REQUESTED → active). */
+  @Post(':id/members/:membershipId/approve')
+  approveMember(
+    @CurrentUser() user: SafeUser,
+    @Param('id') id: string,
+    @Param('membershipId') membershipId: string,
+  ) {
+    return this.members.approveRequest(id, user.id, membershipId);
+  }
+
+  /** Reject a join request or cancel a pending invite. */
+  @Delete(':id/members/:membershipId/pending')
+  removePending(
+    @CurrentUser() user: SafeUser,
+    @Param('id') id: string,
+    @Param('membershipId') membershipId: string,
+  ) {
+    return this.members.removePending(id, user.id, membershipId);
   }
 
   @Delete(':id/members/:membershipId')

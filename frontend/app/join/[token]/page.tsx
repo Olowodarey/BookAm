@@ -1,57 +1,64 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
-import { useParams } from "next/navigation";
+import { useEffect, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
 import { LogoMark } from "@/components/landing/Nav";
-import {
-  coordinatorApi,
-  formatNaira,
-  FREQUENCY_LABEL,
-} from "@/lib/dashboard/api";
-import type { InvitePreview } from "@/lib/dashboard/types";
-import {
-  Button,
-  ErrorNote,
-  Field,
-  Spinner,
-  inputClass,
-} from "@/components/admin/ui";
+import { memberApi, formatNaira, FREQUENCY_LABEL } from "@/lib/member/api";
+import type { InvitePreview } from "@/lib/member/types";
+import { isSignedIn, setPostAuthRedirect } from "@/lib/auth/api";
+import { Button, ErrorNote, Spinner } from "@/components/admin/ui";
 
 /**
- * Public invite page: a prospective member opens the shareable link, sees the
- * circle, and joins with their name and phone. No account needed (yet).
+ * Invite link: anyone can preview the circle, but joining requires a signed-in
+ * BookAm account and only sends a *request* — the coordinator approves it, so
+ * nobody joins just by having the link. (Every member needs an account so they
+ * can upload their own receipts.)
  */
 export default function JoinCirclePage() {
   const { token } = useParams<{ token: string }>();
+  const router = useRouter();
   const [preview, setPreview] = useState<InvitePreview | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [signedIn, setSignedIn] = useState(false);
 
-  const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [joined, setJoined] = useState(false);
+  const [requested, setRequested] = useState(false);
 
   useEffect(() => {
-    coordinatorApi
-      .invitePreview(token)
-      .then(setPreview)
-      .catch((e: unknown) =>
-        setLoadError(
-          e instanceof Error ? e.message : "This invite link is not valid",
-        ),
-      );
+    let active = true;
+    void (async () => {
+      try {
+        const p = await memberApi.invitePreview(token);
+        if (!active) return;
+        setPreview(p);
+        setSignedIn(isSignedIn());
+      } catch (e) {
+        if (active)
+          setLoadError(
+            e instanceof Error ? e.message : "This invite link is not valid",
+          );
+      }
+    })();
+    return () => {
+      active = false;
+    };
   }, [token]);
 
-  const submit = async (e: FormEvent) => {
-    e.preventDefault();
+  const goSignIn = () => {
+    // Come back to this invite after signing in.
+    setPostAuthRedirect(`/join/${token}`);
+    router.push("/login");
+  };
+
+  const request = async () => {
     setError(null);
     setSubmitting(true);
     try {
-      await coordinatorApi.joinCircle(token, { name, phone });
-      setJoined(true);
+      await memberApi.requestJoinCircle(token);
+      setRequested(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not join circle");
+      setError(err instanceof Error ? err.message : "Could not send request");
       setSubmitting(false);
     }
   };
@@ -70,15 +77,19 @@ export default function JoinCirclePage() {
           <ErrorNote message={loadError} />
         ) : !preview ? (
           <Spinner label="Opening your invite…" />
-        ) : joined ? (
+        ) : requested ? (
           <div className="rounded-2xl border-2 border-ink bg-white p-6 text-center shadow-[8px_8px_0_0_rgba(15,90,64,0.16)]">
-            <p className="font-display text-2xl font-bold">You&apos;re in! 🎉</p>
+            <p className="font-display text-2xl font-bold">Request sent! 🎉</p>
             <p className="mt-2 text-sm text-ink/80">
-              Welcome to <span className="font-semibold">{preview.circleName}</span>.
-              The coordinator will confirm your position in the rotation.
-              Contributions stay exactly as before — you pay directly and send
-              your receipt; BookAm just keeps the record straight.
+              We&apos;ve asked the coordinator of{" "}
+              <span className="font-semibold">{preview.circleName}</span> to add
+              you. Once they approve, the circle shows up on your dashboard.
             </p>
+            <div className="mt-5">
+              <Button onClick={() => router.push("/me")} className="w-full">
+                Go to my dashboard
+              </Button>
+            </div>
           </div>
         ) : (
           <div className="rounded-2xl border-2 border-ink bg-white p-6 shadow-[8px_8px_0_0_rgba(15,90,64,0.16)]">
@@ -93,41 +104,42 @@ export default function JoinCirclePage() {
               {FREQUENCY_LABEL[preview.frequency]}
             </p>
             <p className="mt-1 text-sm text-muted">
-              Coordinated by {preview.coordinatorName} ·{" "}
-              {preview.activeMembers} of {preview.memberTarget} members in
+              Coordinated by {preview.coordinatorName} · {preview.activeMembers}{" "}
+              of {preview.memberTarget} members in
             </p>
 
-            <form onSubmit={(e) => void submit(e)} className="mt-5 space-y-4">
-              {error ? <ErrorNote message={error} /> : null}
-              <Field label="Your full name">
-                <input
-                  required
-                  maxLength={80}
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="e.g. Amina Yusuf"
-                  className={inputClass}
-                />
-              </Field>
-              <Field label="Your phone number">
-                <input
-                  type="tel"
-                  required
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="+2348012345678"
-                  className={inputClass}
-                />
-              </Field>
-              <Button type="submit" disabled={submitting} className="w-full">
-                {submitting ? "Joining…" : "Join this circle"}
-              </Button>
-            </form>
+            {error ? (
+              <div className="mt-4">
+                <ErrorNote message={error} />
+              </div>
+            ) : null}
 
-            <p className="mt-4 text-xs text-muted">
-              BookAm never holds the money — it only records who has paid and
-              whose turn it is to collect.
-            </p>
+            {signedIn ? (
+              <div className="mt-5">
+                <Button
+                  onClick={() => void request()}
+                  disabled={submitting}
+                  className="w-full"
+                >
+                  {submitting ? "Sending request…" : "Request to join"}
+                </Button>
+                <p className="mt-3 text-xs text-muted">
+                  The coordinator approves each request — this keeps out anyone
+                  who just stumbled on the link.
+                </p>
+              </div>
+            ) : (
+              <div className="mt-5">
+                <Button onClick={goSignIn} className="w-full">
+                  Sign in to request to join
+                </Button>
+                <p className="mt-3 text-xs text-muted">
+                  You need a BookAm account to join a circle — it&apos;s how you
+                  upload your own payment receipts. We&apos;ll bring you right
+                  back here.
+                </p>
+              </div>
+            )}
           </div>
         )}
       </div>

@@ -145,12 +145,24 @@ export const coordinatorApi = {
     request<CircleSummary>("/circles", { method: "POST", body: input }),
   circleDetail: (id: string) => request<CircleDetail>(`/circles/${id}`),
 
-  // Members
-  addMember: (circleId: string, input: { name: string; phone: string }) =>
-    request<MemberInfo>(`/circles/${circleId}/members`, {
+  // Members — invite an existing BookAm account by email (they accept in-app)
+  inviteMember: (circleId: string, email: string) =>
+    request<MemberInfo>(`/circles/${circleId}/members/invite`, {
       method: "POST",
-      body: input,
+      body: { email },
     }),
+  // Approve a join request that came in via the invite link
+  approveMember: (circleId: string, membershipId: string) =>
+    request<MemberInfo>(
+      `/circles/${circleId}/members/${membershipId}/approve`,
+      { method: "POST" },
+    ),
+  // Reject a join request or cancel a pending invite
+  removePendingMember: (circleId: string, membershipId: string) =>
+    request<{ removed: true }>(
+      `/circles/${circleId}/members/${membershipId}/pending`,
+      { method: "DELETE" },
+    ),
   removeMember: (circleId: string, membershipId: string) =>
     request<{ removed: true }>(
       `/circles/${circleId}/members/${membershipId}`,
@@ -230,14 +242,9 @@ export const coordinatorApi = {
       body: outcomeNote ? { outcomeNote } : {},
     }),
 
-  // Public invite flow (no token needed)
-  invitePreview: (token: string) =>
-    request<InvitePreview>(`/invite/${token}`),
-  joinCircle: (token: string, input: { name: string; phone: string }) =>
-    request<{ joined: true; circleName: string }>(`/invite/${token}/join`, {
-      method: "POST",
-      body: input,
-    }),
+  // Public invite preview (no token needed). Requesting to join is a member
+  // action (requires login) — see memberApi.requestJoinCircle.
+  invitePreview: (token: string) => request<InvitePreview>(`/invite/${token}`),
 };
 
 export const FREQUENCY_LABEL: Record<string, string> = {

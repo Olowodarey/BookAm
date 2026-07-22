@@ -86,7 +86,7 @@ export default function MembersPage() {
               variant={dirty ? "secondary" : "primary"}
               onClick={() => setAdding(true)}
             >
-              + Add member
+              + Invite member
             </Button>
           </div>
         }
@@ -104,11 +104,18 @@ export default function MembersPage() {
         onChanged={() => void refresh()}
       />
 
+      <PendingSection
+        circleId={circle.id}
+        requests={detail.pendingRequests}
+        invites={detail.pendingInvites}
+        onChanged={() => void refresh()}
+      />
+
       <Card className="mt-4">
         {order.length === 0 ? (
           <EmptyState
             title="No members yet"
-            hint="Add members by name and phone, or share the invite link."
+            hint="Invite people by email, or share the invite link for them to request to join."
           />
         ) : (
           <ol className="divide-y divide-line/70">
@@ -143,7 +150,9 @@ export default function MembersPage() {
                       </span>
                     ) : null}
                   </p>
-                  <p className="font-mono text-xs text-muted">{member.phone}</p>
+                  <p className="truncate font-mono text-xs text-muted">
+                    {member.email ?? member.phone ?? ""}
+                  </p>
                 </div>
                 <div className="flex items-center gap-1">
                   <button
@@ -187,7 +196,7 @@ export default function MembersPage() {
       </Card>
 
       {adding ? (
-        <AddMemberModal
+        <InviteMemberModal
           circleId={circle.id}
           onClose={() => setAdding(false)}
           onDone={() => {
@@ -262,7 +271,8 @@ function InviteLinkCard({
             </p>
           ) : (
             <p className="mt-1 text-sm text-muted">
-              Share a link so members can join with their own name and phone.
+              Share a link so people can request to join — they sign in and you
+              approve each request.
             </p>
           )}
         </div>
@@ -301,7 +311,130 @@ function InviteLinkCard({
   );
 }
 
-function AddMemberModal({
+/** Pending join requests (from the link) and pending email invites. */
+function PendingSection({
+  circleId,
+  requests,
+  invites,
+  onChanged,
+}: {
+  circleId: string;
+  requests: MemberInfo[];
+  invites: MemberInfo[];
+  onChanged: () => void;
+}) {
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  if (requests.length === 0 && invites.length === 0) return null;
+
+  const run = async (id: string, fn: () => Promise<unknown>) => {
+    setBusyId(id);
+    setError(null);
+    try {
+      await fn();
+      onChanged();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Action failed");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const who = (m: MemberInfo) => m.email ?? m.name;
+
+  return (
+    <Card className="mt-4 px-5 py-4">
+      {error ? (
+        <div className="mb-3">
+          <ErrorNote message={error} />
+        </div>
+      ) : null}
+
+      {requests.length > 0 ? (
+        <div>
+          <p className="font-mono text-[11px] font-bold uppercase tracking-wide text-ink/60">
+            Join requests ({requests.length})
+          </p>
+          <ul className="mt-2 space-y-2">
+            {requests.map((m) => (
+              <li
+                key={m.id}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-line px-3 py-2"
+              >
+                <div className="min-w-0">
+                  <p className="truncate font-semibold">{m.name}</p>
+                  <p className="truncate font-mono text-xs text-muted">
+                    {who(m)}
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    onClick={() =>
+                      void run(m.id, () =>
+                        coordinatorApi.approveMember(circleId, m.id),
+                      )
+                    }
+                    disabled={busyId === m.id}
+                  >
+                    Approve
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    onClick={() =>
+                      void run(m.id, () =>
+                        coordinatorApi.removePendingMember(circleId, m.id),
+                      )
+                    }
+                    disabled={busyId === m.id}
+                  >
+                    Reject
+                  </Button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {invites.length > 0 ? (
+        <div className={requests.length > 0 ? "mt-4" : ""}>
+          <p className="font-mono text-[11px] font-bold uppercase tracking-wide text-ink/60">
+            Invited — waiting for them to accept ({invites.length})
+          </p>
+          <ul className="mt-2 space-y-2">
+            {invites.map((m) => (
+              <li
+                key={m.id}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-line px-3 py-2"
+              >
+                <div className="min-w-0">
+                  <p className="truncate font-semibold">{m.name}</p>
+                  <p className="truncate font-mono text-xs text-muted">
+                    {who(m)}
+                  </p>
+                </div>
+                <Button
+                  variant="ghost"
+                  onClick={() =>
+                    void run(m.id, () =>
+                      coordinatorApi.removePendingMember(circleId, m.id),
+                    )
+                  }
+                  disabled={busyId === m.id}
+                >
+                  Cancel invite
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </Card>
+  );
+}
+
+function InviteMemberModal({
   circleId,
   onClose,
   onDone,
@@ -310,8 +443,7 @@ function AddMemberModal({
   onClose: () => void;
   onDone: () => void;
 }) {
-  const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -320,48 +452,44 @@ function AddMemberModal({
     setError(null);
     setSubmitting(true);
     try {
-      await coordinatorApi.addMember(circleId, { name, phone });
+      await coordinatorApi.inviteMember(circleId, email);
       onDone();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not add member");
+      setError(err instanceof Error ? err.message : "Could not invite member");
       setSubmitting(false);
     }
   };
 
   return (
-    <Modal title="Add member" onClose={onClose}>
+    <Modal title="Invite member" onClose={onClose}>
       <form onSubmit={(e) => void submit(e)} className="space-y-4">
         {error ? <ErrorNote message={error} /> : null}
-        <Field label="Full name">
+        <Field label="Their BookAm email">
           <input
+            type="email"
             required
-            maxLength={80}
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. Amina Yusuf"
-            className={inputClass}
-          />
-        </Field>
-        <Field label="Phone number">
-          <input
-            type="tel"
-            required
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            placeholder="+2348012345678"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="member@example.com"
             className={inputClass}
           />
         </Field>
         <p className="text-xs text-muted">
-          New members join at the back of the rotation — drag them into place
-          afterwards.
+          They must already have a BookAm account (that&apos;s how they upload
+          their own receipts). They&apos;ll get the invite on their dashboard
+          and join the rotation once they accept.
         </p>
         <div className="flex justify-end gap-2">
-          <Button variant="ghost" type="button" onClick={onClose} disabled={submitting}>
+          <Button
+            variant="ghost"
+            type="button"
+            onClick={onClose}
+            disabled={submitting}
+          >
             Cancel
           </Button>
           <Button type="submit" disabled={submitting}>
-            {submitting ? "Adding…" : "Add member"}
+            {submitting ? "Inviting…" : "Send invite"}
           </Button>
         </div>
       </form>
@@ -399,8 +527,10 @@ function RemoveMemberModal({
     <Modal title="Remove member" onClose={onClose}>
       <p className="text-sm text-ink/80">
         <span className="font-semibold">{member.name}</span> (
-        <span className="font-mono text-xs">{member.phone}</span>) will leave
-        the rotation. Their past payment records stay in the book.
+        <span className="font-mono text-xs">
+          {member.email ?? member.phone ?? ""}
+        </span>
+        ) will leave the rotation. Their past payment records stay in the book.
       </p>
       {error ? (
         <div className="mt-3">

@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   NotFoundException,
   Param,
@@ -46,6 +47,29 @@ export class MemberController {
   @Get('circles')
   myCircles(@CurrentUser() user: SafeUser) {
     return this.member.myCircles(user.id);
+  }
+
+  // ---- Circle invites (coordinator invited me by email) --------------------
+
+  @Get('invites')
+  myInvites(@CurrentUser() user: SafeUser) {
+    return this.member.myInvites(user.id);
+  }
+
+  @Post('invites/:membershipId/accept')
+  acceptInvite(
+    @CurrentUser() user: SafeUser,
+    @Param('membershipId') membershipId: string,
+  ) {
+    return this.member.acceptInvite(user.id, membershipId);
+  }
+
+  @Delete('invites/:membershipId')
+  declineInvite(
+    @CurrentUser() user: SafeUser,
+    @Param('membershipId') membershipId: string,
+  ) {
+    return this.member.declineInvite(user.id, membershipId);
   }
 
   @Get('circles/:circleId')

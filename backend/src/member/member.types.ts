@@ -94,6 +94,17 @@ export interface MemberPayout {
   completedAt: Date | null;
 }
 
+/** A pending circle invite the member can accept or decline from their home. */
+export interface CircleInvite {
+  membershipId: string;
+  circleId: string;
+  circleName: string;
+  amountNaira: number;
+  frequency: CircleFrequency;
+  coordinatorName: string;
+  invitedAt: Date;
+}
+
 /** The member's own "become a collector" request, as shown on their home. */
 export interface MyCollectorApplication {
   id: string;

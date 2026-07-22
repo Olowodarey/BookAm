@@ -15,6 +15,7 @@ export type {
   CircleFrequency,
   CircleStatus,
   ContributionStatus,
+  InvitePreview,
   PayoutAccount,
   PayoutStatus,
 } from "../dashboard/types";
@@ -30,6 +31,17 @@ import type {
 export type AppealStatus = "OPEN" | "APPROVED" | "REJECTED" | "WITHDRAWN";
 export type VoteValue = "SUPPORT" | "OPPOSE";
 export type ApplicationStatus = "PENDING" | "APPROVED" | "REJECTED";
+
+/** A pending circle invite the member can accept or decline from their home. */
+export interface CircleInvite {
+  membershipId: string;
+  circleId: string;
+  circleName: string;
+  amountNaira: number;
+  frequency: CircleFrequency;
+  coordinatorName: string;
+  invitedAt: string;
+}
 
 /** The member's own "become a collector" request, as shown on their home. */
 export interface MyCollectorApplication {
