@@ -51,13 +51,26 @@ export class EmailService {
     await transporter.sendMail({ from: this.from, to, subject, text });
   }
 
-  /** Convenience: the one email BookAm sends most — a 6-digit code. */
-  async sendCode(to: string, code: string, purpose: string): Promise<void> {
+  /**
+   * The one email BookAm sends most — a 6-digit code, plus an optional
+   * one-click link that carries the same code so people can verify without
+   * typing anything.
+   */
+  async sendCode(
+    to: string,
+    code: string,
+    purpose: string,
+    link?: string,
+  ): Promise<void> {
+    const linkLine = link
+      ? `\nOr just click this link to ${purpose === 'password reset' ? 'reset your password' : 'confirm your email'}:\n${link}\n`
+      : '';
     await this.send(
       to,
       `Your BookAm ${purpose} code`,
-      `Your BookAm ${purpose} code is ${code}. It expires in 10 minutes.\n\n` +
-        `If you didn't request this, you can ignore this email.`,
+      `Your BookAm ${purpose} code is ${code}. It expires in 10 minutes.\n` +
+        linkLine +
+        `\nIf you didn't request this, you can ignore this email.`,
     );
   }
 }

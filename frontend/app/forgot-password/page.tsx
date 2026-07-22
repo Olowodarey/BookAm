@@ -1,24 +1,61 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { Suspense, useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { authApi, homeFor, storeSession } from "@/lib/auth/api";
 import AuthShell from "@/components/auth/AuthShell";
-import { Button, ErrorNote, Field, inputClass } from "@/components/admin/ui";
+import {
+  Button,
+  ErrorNote,
+  Field,
+  Spinner,
+  inputClass,
+} from "@/components/admin/ui";
 
 type Step =
   | { kind: "email" }
-  | { kind: "reset"; email: string; devCode?: string; resendAfter: number };
+  | {
+      kind: "reset";
+      email: string;
+      code?: string;
+      devCode?: string;
+      resendAfter: number;
+    };
 
 /**
  * Forgot password: the emailed code that proves email ownership also
  * authorizes the new password — and signs the user straight in afterwards.
  * (It's also how a Google-only user adds a password to their account.)
+ * The reset email links here with ?email=&code=, jumping straight to the
+ * "set a new password" step with the code pre-filled.
  */
 export default function ForgotPasswordPage() {
+  return (
+    <Suspense fallback={<AuthShellFallback />}>
+      <ForgotPasswordInner />
+    </Suspense>
+  );
+}
+
+function AuthShellFallback() {
+  return (
+    <AuthShell badge="Reset" footer={null}>
+      <Spinner label="Loading…" />
+    </AuthShell>
+  );
+}
+
+function ForgotPasswordInner() {
   const router = useRouter();
-  const [step, setStep] = useState<Step>({ kind: "email" });
+  const params = useSearchParams();
+  const linkEmail = params.get("email");
+  const linkCode = params.get("code");
+  const [step, setStep] = useState<Step>(
+    linkEmail && linkCode
+      ? { kind: "reset", email: linkEmail, code: linkCode, resendAfter: 0 }
+      : { kind: "email" },
+  );
   const [email, setEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -85,6 +122,7 @@ export default function ForgotPasswordPage() {
       ) : (
         <ResetStep
           email={step.email}
+          initialCode={step.code}
           initialDevCode={step.devCode}
           resendAfter={step.resendAfter}
           onDone={(role) => router.replace(homeFor(role))}
@@ -96,16 +134,18 @@ export default function ForgotPasswordPage() {
 
 function ResetStep({
   email,
+  initialCode,
   initialDevCode,
   resendAfter,
   onDone,
 }: {
   email: string;
+  initialCode?: string;
   initialDevCode?: string;
   resendAfter: number;
   onDone: (role: "MEMBER" | "COORDINATOR" | "ADMIN") => void;
 }) {
-  const [code, setCode] = useState("");
+  const [code, setCode] = useState(initialCode ?? "");
   const [password, setPassword] = useState("");
   const [devCode, setDevCode] = useState(initialDevCode);
   const [cooldown, setCooldown] = useState(resendAfter);

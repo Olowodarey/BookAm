@@ -53,11 +53,29 @@ export class EmailOtpService {
       },
     });
 
-    await this.email.sendCode(email, code, purpose);
+    await this.email.sendCode(
+      email,
+      code,
+      purpose,
+      this.link(purpose, email, code),
+    );
     return {
       resendAfterSeconds: RESEND_COOLDOWN_MS / 1000,
       ...(process.env.NODE_ENV !== 'production' ? { devCode: code } : {}),
     };
+  }
+
+  /**
+   * A one-click link carrying the same code, so people can verify from the
+   * email without typing. Verification lands on /verify-email (which signs them
+   * in); a reset lands on /forgot-password with the code pre-filled.
+   */
+  private link(purpose: string, email: string, code: string): string {
+    const base = process.env.FRONTEND_URL ?? 'http://localhost:3000';
+    const q = `email=${encodeURIComponent(email)}&code=${code}`;
+    const path =
+      purpose === 'password reset' ? '/forgot-password' : '/verify-email';
+    return `${base}${path}?${q}`;
   }
 
   /** Consumes the latest valid code for the email or throws a 400. */
