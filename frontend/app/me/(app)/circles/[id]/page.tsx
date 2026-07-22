@@ -55,9 +55,18 @@ export default function MemberCircleOverviewPage() {
               }
             />
             <Stat
-              label="Pot so far"
-              value={formatNaira(detail.potNaira)}
-              hint={`of ${formatNaira(detail.expectedNaira)} expected`}
+              label="Collector gets"
+              value={formatNaira(
+                detail.potNaira -
+                  Math.round(
+                    (detail.potNaira * detail.coordinatorFeePercent) / 100,
+                  ),
+              )}
+              hint={
+                detail.coordinatorFeePercent > 0
+                  ? `${formatNaira(detail.potNaira)} pot − ${detail.coordinatorFeePercent}% fee`
+                  : `${formatNaira(detail.potNaira)} pot · no fee`
+              }
             />
             <Stat
               label="My position"
@@ -116,6 +125,30 @@ function CollectorHero() {
           </span>
         ) : null}
       </div>
+
+      {(() => {
+        const fee = Math.round(
+          (detail.potNaira * detail.coordinatorFeePercent) / 100,
+        );
+        return (
+          <div className="mt-3 flex flex-wrap items-baseline gap-x-2 gap-y-1 text-sm text-paper/85">
+            <span>Takes home</span>
+            <span className="font-mono text-lg font-bold text-gold">
+              {formatNaira(detail.potNaira - fee)}
+            </span>
+            {detail.coordinatorFeePercent > 0 ? (
+              <span className="text-paper/60">
+                ({formatNaira(detail.potNaira)} pot −{" "}
+                {detail.coordinatorFeePercent}% coordinator fee ={" "}
+                {formatNaira(fee)})
+              </span>
+            ) : (
+              <span className="text-paper/60">(full pot, no fee)</span>
+            )}
+          </div>
+        );
+      })()}
+
       {detail.upcoming.length > 0 ? (
         <div className="mt-4 border-t border-paper/10 pt-3">
           <p className="font-mono text-[10px] font-bold uppercase tracking-wide text-paper/50">

@@ -144,6 +144,21 @@ export const coordinatorApi = {
   createCircle: (input: CreateCircleInput) =>
     request<CircleSummary>("/circles", { method: "POST", body: input }),
   circleDetail: (id: string) => request<CircleDetail>(`/circles/${id}`),
+  // Edit circle settings (name, coordinator fee %).
+  updateCircle: (
+    id: string,
+    input: { name?: string; feePercent?: number },
+  ) =>
+    request<CircleSummary>(`/circles/${id}`, { method: "PATCH", body: input }),
+  // Coordinator opts in/out of their own circle's rotation.
+  joinSelf: (circleId: string) =>
+    request<MemberInfo>(`/circles/${circleId}/members/join-self`, {
+      method: "POST",
+    }),
+  leaveSelf: (circleId: string) =>
+    request<{ removed: true }>(`/circles/${circleId}/members/join-self`, {
+      method: "DELETE",
+    }),
 
   // Members — invite an existing BookAm account by email (they accept in-app)
   inviteMember: (circleId: string, email: string) =>

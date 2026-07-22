@@ -42,6 +42,11 @@ export default function PayoutPage() {
 
   const payout = cycle.payout;
   const collector = cycle.collector;
+  // Fee/net from the live pot (the payout row may not exist yet).
+  const feeNaira = Math.round(
+    (cycle.potNaira * circle.coordinatorFeePercent) / 100,
+  );
+  const netPayout = cycle.potNaira - feeNaira;
 
   const uploadReceipt = async (file: File) => {
     setBusy(true);
@@ -85,7 +90,7 @@ export default function PayoutPage() {
         </div>
       ) : null}
 
-      <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Stat
           label="Collects this round"
           value={
@@ -93,7 +98,9 @@ export default function PayoutPage() {
               {collector?.name ?? "—"}
             </span>
           }
-          hint={collector ? `${collector.phone} · position ${collector.position}` : "Add members first"}
+          hint={
+            collector ? `position ${collector.position}` : "Add members first"
+          }
         />
         <Stat
           label="Pot total (recorded)"
@@ -101,9 +108,16 @@ export default function PayoutPage() {
           hint={`${circle.paidCount} of ${cycle.contributions.length} members paid`}
         />
         <Stat
-          label="Expected full pot"
-          value={formatNaira(cycle.expectedNaira)}
-          hint="if every member pays"
+          label={`Your fee (${circle.coordinatorFeePercent}%)`}
+          value={formatNaira(feeNaira)}
+          hint={
+            circle.coordinatorFeePercent === 0 ? "no fee set" : "your cut"
+          }
+        />
+        <Stat
+          label="Collector receives"
+          value={formatNaira(netPayout)}
+          hint="pot minus your fee"
         />
       </div>
 

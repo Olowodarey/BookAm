@@ -12,6 +12,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { LogoMark } from "@/components/landing/Nav";
 import { ApiError, coordinatorApi, setToken } from "@/lib/dashboard/api";
+import { clearSession } from "@/lib/auth/api";
 import type { CircleSummary, SafeUser } from "@/lib/dashboard/types";
 import { Spinner } from "@/components/admin/ui";
 
@@ -92,8 +93,8 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
   }
 
   const signOut = () => {
-    setToken(null);
-    router.replace("/login");
+    clearSession();
+    router.replace("/");
   };
 
   const activeCircleId = circleIdFromPath(pathname);

@@ -6,7 +6,8 @@ import {
 import { Prisma } from '@prisma/client';
 import type { Circle, Cycle, Membership } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import type { CreateCircleDto } from './dto/circle.dto';
+import { feeBreakdown } from './fee';
+import type { CreateCircleDto, UpdateCircleDto } from './dto/circle.dto';
 import type {
   ActiveCycleInfo,
   CircleDetail,
@@ -211,11 +212,31 @@ export class CirclesService {
         contributionAmountNaira: dto.amountNaira,
         frequency: dto.frequency,
         memberTarget: dto.memberTarget,
+        coordinatorFeePercent: dto.feePercent ?? 0,
         coordinatorId,
       },
     });
     await this.prisma.cycle.create({
       data: { circleId: circle.id, index: 1 },
+    });
+    return this.summarize(circle);
+  }
+
+  /** Coordinator edits circle settings (name, fee percent). */
+  async update(
+    circleId: string,
+    coordinatorId: string,
+    dto: UpdateCircleDto,
+  ): Promise<CircleSummary> {
+    await this.assertOwned(circleId, coordinatorId);
+    const circle = await this.prisma.circle.update({
+      where: { id: circleId },
+      data: {
+        ...(dto.name !== undefined ? { name: dto.name } : {}),
+        ...(dto.feePercent !== undefined
+          ? { coordinatorFeePercent: dto.feePercent }
+          : {}),
+      },
     });
     return this.summarize(circle);
   }
@@ -263,7 +284,9 @@ export class CirclesService {
           .reduce((sum, r) => sum + r.amountNaira, 0),
         expectedNaira: circle.contributionAmountNaira * members.length,
         contributions: rows.map((r) => this.toContributionInfo(r)),
-        payout: payout ? this.toPayoutInfo(payout) : null,
+        payout: payout
+          ? this.toPayoutInfo(payout, circle.coordinatorFeePercent)
+          : null,
       };
     }
 
@@ -276,6 +299,7 @@ export class CirclesService {
         status: circle.status,
         memberTarget: circle.memberTarget,
         activeMembers: members.length,
+        coordinatorFeePercent: circle.coordinatorFeePercent,
         currentCycleIndex: cycleInfo?.index ?? null,
         paidCount,
         owingCount,
@@ -288,10 +312,15 @@ export class CirclesService {
       ),
       pendingRequests: pending
         .filter((m) => m.status === 'REQUESTED')
-        .map((m) => this.toMemberInfo(m, collectedIds, emails.get(m.id) ?? null)),
+        .map((m) =>
+          this.toMemberInfo(m, collectedIds, emails.get(m.id) ?? null),
+        ),
       pendingInvites: pending
         .filter((m) => m.status === 'INVITED')
-        .map((m) => this.toMemberInfo(m, collectedIds, emails.get(m.id) ?? null)),
+        .map((m) =>
+          this.toMemberInfo(m, collectedIds, emails.get(m.id) ?? null),
+        ),
+      iAmMember: members.some((m) => m.userId === coordinatorId),
       cycle: cycleInfo,
     };
   }
@@ -323,6 +352,7 @@ export class CirclesService {
       status: circle.status,
       memberTarget: circle.memberTarget,
       activeMembers,
+      coordinatorFeePercent: circle.coordinatorFeePercent,
       currentCycleIndex: state?.cycle.index ?? null,
       paidCount,
       owingCount,
@@ -398,11 +428,17 @@ export class CirclesService {
     };
   }
 
-  toPayoutInfo(p: PayoutWithReceipts): PayoutInfo {
+  toPayoutInfo(p: PayoutWithReceipts, feePercent: number): PayoutInfo {
+    const { feeNaira, netPayoutNaira } = feeBreakdown(
+      p.amountNaira,
+      feePercent,
+    );
     return {
       id: p.id,
       status: p.status,
       amountNaira: p.amountNaira,
+      feeNaira,
+      netPayoutNaira,
       paidNaira: p.receipts.reduce((sum, r) => sum + r.amountNaira, 0),
       receiptFileUrl: p.receiptFileUrl,
       receipts: p.receipts.map((r) => this.toReceiptRecord(r)),

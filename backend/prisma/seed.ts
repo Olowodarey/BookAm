@@ -248,6 +248,7 @@ async function main() {
             name,
             phone,
             position: i + 1,
+            status: 'ACTIVE',
             userId: users[phone]?.id ?? null,
           },
         }),
@@ -392,7 +393,14 @@ async function main() {
     for (const [i, [name, phone, userId]] of ketuMemberSeed.entries()) {
       ketuMemberships.push(
         await prisma.membership.create({
-          data: { circleId: ketu.id, name, phone, position: i + 1, userId },
+          data: {
+            circleId: ketu.id,
+            name,
+            phone,
+            position: i + 1,
+            status: 'ACTIVE',
+            userId,
+          },
         }),
       );
     }

@@ -3,6 +3,7 @@ import {
   IsEnum,
   IsInt,
   IsNotEmpty,
+  IsOptional,
   IsString,
   Max,
   MaxLength,
@@ -29,4 +30,28 @@ export class CreateCircleDto {
   @Min(2)
   @Max(200)
   memberTarget!: number;
+
+  /** The coordinator's cut as a whole percent of the pot (0–100). */
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(100)
+  feePercent?: number;
+}
+
+/** Coordinator settings a circle allows changing after creation. */
+export class UpdateCircleDto {
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(80)
+  name?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(100)
+  feePercent?: number;
 }

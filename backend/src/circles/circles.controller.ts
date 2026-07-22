@@ -21,7 +21,7 @@ import { PayoutsService } from './payouts.service';
 import { AppealsService } from './appeals.service';
 import { MAX_RECEIPT_BYTES, type ReceiptFile } from './receipt-storage.service';
 import { parseAmountField } from './receipt-amount';
-import { CreateCircleDto } from './dto/circle.dto';
+import { CreateCircleDto, UpdateCircleDto } from './dto/circle.dto';
 import { InviteMemberDto, ReorderMembersDto } from './dto/member.dto';
 import { RejectContributionDto } from './dto/contribution.dto';
 import { DecideAppealDto } from './dto/appeal.dto';
@@ -63,7 +63,29 @@ export class CirclesController {
     return this.circles.detail(id, user.id);
   }
 
+  /** Edit circle settings — currently name and the coordinator's fee percent. */
+  @Patch(':id')
+  update(
+    @CurrentUser() user: SafeUser,
+    @Param('id') id: string,
+    @Body() dto: UpdateCircleDto,
+  ) {
+    return this.circles.update(id, user.id, dto);
+  }
+
   // ---- Members ------------------------------------------------------------
+
+  /** The coordinator adds themselves to their own circle's rotation (opt-in). */
+  @Post(':id/members/join-self')
+  joinSelf(@CurrentUser() user: SafeUser, @Param('id') id: string) {
+    return this.members.joinSelf(id, user.id);
+  }
+
+  /** The coordinator leaves their own circle's rotation. */
+  @Delete(':id/members/join-self')
+  leaveSelf(@CurrentUser() user: SafeUser, @Param('id') id: string) {
+    return this.members.leaveSelf(id, user.id);
+  }
 
   /** Invite an existing BookAm account by email (they accept from their app). */
   @Post(':id/members/invite')

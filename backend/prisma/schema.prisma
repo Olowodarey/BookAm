@@ -188,6 +188,9 @@ model Circle {
   status                  CircleStatus    @default(ACTIVE)
   // Planned rotation size (number of member slots the coordinator set up).
   memberTarget            Int             @default(0)
+  // The coordinator's cut, as a whole percent of the pot (0–100). Each payout
+  // to the collecting member is the pot MINUS this fee. Shown to all members.
+  coordinatorFeePercent   Int             @default(0)
   // Random token for the shareable "join this circle" link. Null = link off.
   inviteToken             String?         @unique
   coordinator             User            @relation("Coordinator", fields: [coordinatorId], references: [id])

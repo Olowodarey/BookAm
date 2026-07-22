@@ -28,6 +28,8 @@ export interface CircleSummary {
   memberTarget: number;
   /** Actual active members right now. */
   activeMembers: number;
+  /** The coordinator's cut as a whole percent of the pot (0–100). */
+  coordinatorFeePercent: number;
   currentCycleIndex: number | null;
   paidCount: number;
   owingCount: number;
@@ -94,6 +96,10 @@ export interface PayoutInfo {
   status: PayoutStatus;
   /** Computed pot (sum of PAID contributions) — a figure, not a balance. */
   amountNaira: number;
+  /** The coordinator's cut of this pot (potNaira × feePercent, rounded). */
+  feeNaira: number;
+  /** What the collector actually receives: pot − fee. */
+  netPayoutNaira: number;
   /** Sum of installment receipts sent to the collector so far. */
   paidNaira: number;
   /** Latest receipt (mirror of the newest entry in `receipts`). */
@@ -127,6 +133,8 @@ export interface CircleDetail {
   pendingRequests: MemberInfo[];
   /** People the coordinator invited by email — awaiting their acceptance. */
   pendingInvites: MemberInfo[];
+  /** Whether the coordinator has opted into their own circle's rotation. */
+  iAmMember: boolean;
   cycle: ActiveCycleInfo | null;
 }
 

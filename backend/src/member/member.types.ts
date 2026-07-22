@@ -87,6 +87,10 @@ export interface MemberPayout {
   status: PayoutStatus;
   /** The pot figure (sum of PAID contributions). */
   amountNaira: number;
+  /** The coordinator's cut of the pot. */
+  feeNaira: number;
+  /** What the collector actually receives: pot − fee. */
+  netPayoutNaira: number;
   /** How much the collector has been paid so far (sum of payout receipts). */
   paidNaira: number;
   collectorName: string | null;
@@ -132,6 +136,8 @@ export interface MemberCircleDetail {
   coordinatorName: string;
   /** The coordinator's account — where members send contributions. */
   coordinatorAccount: PayoutAccount | null;
+  /** The coordinator's cut as a whole percent — visible to every member. */
+  coordinatorFeePercent: number;
   memberTarget: number;
   cycleIndex: number | null;
   collector: RotationSlot | null;

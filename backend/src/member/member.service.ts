@@ -18,6 +18,7 @@ import {
   type ReceiptFile,
 } from '../circles/receipt-storage.service';
 import { resolveReceiptAmount } from '../circles/receipt-amount';
+import { feeBreakdown } from '../circles/fee';
 import type {
   CircleInvite,
   MemberCircleDetail,
@@ -207,7 +208,11 @@ export class MemberService {
     });
 
     const payout = state
-      ? await this.cyclePayout(state.cycle.id, state.collector?.name ?? null)
+      ? await this.cyclePayout(
+          state.cycle.id,
+          state.collector?.name ?? null,
+          circle.coordinatorFeePercent,
+        )
       : null;
 
     const queue = members.filter((m) => !collected.has(m.id));
@@ -235,6 +240,7 @@ export class MemberService {
       coordinatorAccount: await this.circles.payoutAccountFor(
         circle.coordinatorId,
       ),
+      coordinatorFeePercent: circle.coordinatorFeePercent,
       memberTarget: circle.memberTarget,
       cycleIndex: state?.cycle.index ?? null,
       collector: state?.collector
@@ -425,15 +431,22 @@ export class MemberService {
   private async cyclePayout(
     cycleId: string,
     collectorName: string | null,
+    feePercent: number,
   ): Promise<MemberPayout | null> {
     const payout = await this.prisma.payout.findUnique({
       where: { cycleId },
       include: payoutInclude,
     });
     if (!payout) return null;
+    const { feeNaira, netPayoutNaira } = feeBreakdown(
+      payout.amountNaira,
+      feePercent,
+    );
     return {
       status: payout.status,
       amountNaira: payout.amountNaira,
+      feeNaira,
+      netPayoutNaira,
       paidNaira: payout.receipts.reduce((sum, r) => sum + r.amountNaira, 0),
       collectorName,
       receipts: payout.receipts.map((r) => this.circles.toReceiptRecord(r)),

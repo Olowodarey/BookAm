@@ -74,6 +74,8 @@ export default function CircleOverviewPage() {
         </div>
       ) : null}
 
+      <CircleSettingsCard />
+
       {!cycle ? (
         <Card>
           <EmptyState
@@ -149,6 +151,123 @@ export default function CircleOverviewPage() {
         />
       ) : null}
     </div>
+  );
+}
+
+/**
+ * Coordinator-only card: set your fee percent (all members see it and the
+ * collector receives the pot minus it) and opt in/out of your own rotation.
+ */
+function CircleSettingsCard() {
+  const { detail, refresh } = useCircle();
+  const { circle } = detail;
+  const [fee, setFee] = useState(String(circle.coordinatorFeePercent));
+  const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Keep the field in sync when the server value changes (e.g. after refresh).
+  const [seen, setSeen] = useState(circle.coordinatorFeePercent);
+  if (seen !== circle.coordinatorFeePercent) {
+    setSeen(circle.coordinatorFeePercent);
+    setFee(String(circle.coordinatorFeePercent));
+  }
+
+  const feeChanged = Number(fee) !== circle.coordinatorFeePercent;
+
+  const saveFee = async () => {
+    setBusy(true);
+    setError(null);
+    setSaved(false);
+    try {
+      await coordinatorApi.updateCircle(circle.id, { feePercent: Number(fee) });
+      setSaved(true);
+      await refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not save fee");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const toggleSelf = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      if (detail.iAmMember) {
+        await coordinatorApi.leaveSelf(circle.id);
+      } else {
+        await coordinatorApi.joinSelf(circle.id);
+      }
+      await refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not update membership");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Card className="mb-6 px-5 py-4">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p className="font-mono text-[11px] font-bold uppercase tracking-wide text-ink/60">
+            Coordinator settings
+          </p>
+          <div className="mt-2 flex items-end gap-2">
+            <Field label="Your fee (% of pot)">
+              <input
+                type="number"
+                min={0}
+                max={100}
+                step={1}
+                inputMode="numeric"
+                value={fee}
+                onChange={(e) => {
+                  setFee(e.target.value);
+                  setSaved(false);
+                }}
+                className={`${inputClass} w-28`}
+              />
+            </Field>
+            <Button onClick={() => void saveFee()} disabled={busy || !feeChanged}>
+              {busy ? "Saving…" : "Save fee"}
+            </Button>
+            {saved && !feeChanged ? (
+              <span className="pb-2 text-sm font-semibold text-green">
+                Saved ✓
+              </span>
+            ) : null}
+          </div>
+          <p className="mt-1 text-xs text-muted">
+            Every member sees this. The collector receives the pot minus your
+            fee.
+          </p>
+        </div>
+
+        <div className="text-right">
+          <p className="text-sm text-ink/80">
+            {detail.iAmMember
+              ? "You're contributing in this circle's rotation."
+              : "You're running this circle but not contributing."}
+          </p>
+          <div className="mt-2">
+            <Button
+              variant={detail.iAmMember ? "danger" : "secondary"}
+              onClick={() => void toggleSelf()}
+              disabled={busy}
+            >
+              {detail.iAmMember ? "Leave the rotation" : "Join circle myself"}
+            </Button>
+          </div>
+        </div>
+      </div>
+      {error ? (
+        <div className="mt-3">
+          <ErrorNote message={error} />
+        </div>
+      ) : null}
+    </Card>
   );
 }
 

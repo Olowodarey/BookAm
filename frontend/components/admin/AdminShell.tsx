@@ -11,6 +11,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { LogoMark } from "@/components/landing/Nav";
 import { adminApi, setToken, ApiError } from "@/lib/admin/api";
+import { clearSession } from "@/lib/auth/api";
 import type { SafeUser } from "@/lib/admin/types";
 import { Spinner } from "./ui";
 
@@ -89,8 +90,8 @@ export default function AdminShell({ children }: { children: ReactNode }) {
   }
 
   const signOut = () => {
-    setToken(null);
-    router.replace("/admin/login");
+    clearSession();
+    router.replace("/");
   };
 
   return (

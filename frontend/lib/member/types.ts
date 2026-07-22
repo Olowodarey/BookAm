@@ -123,6 +123,10 @@ export interface MyContribution {
 export interface MemberPayout {
   status: PayoutStatus;
   amountNaira: number;
+  /** The coordinator's cut of the pot. */
+  feeNaira: number;
+  /** What the collector actually receives: pot − fee. */
+  netPayoutNaira: number;
   paidNaira: number;
   collectorName: string | null;
   receipts: MemberReceipt[];
@@ -138,6 +142,8 @@ export interface MemberCircleDetail {
   coordinatorName: string;
   /** The coordinator's account — where members send contributions. */
   coordinatorAccount: PayoutAccount | null;
+  /** The coordinator's cut as a whole percent — visible to every member. */
+  coordinatorFeePercent: number;
   memberTarget: number;
   cycleIndex: number | null;
   collector: RotationSlot | null;

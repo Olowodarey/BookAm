@@ -53,6 +53,70 @@ export class MembersService {
     return this.circles.toMemberInfo(membership, new Set(), user.email);
   }
 
+  /**
+   * The coordinator opts into their own circle's rotation (they can run a
+   * circle without contributing). Adds their account straight as ACTIVE.
+   */
+  async joinSelf(circleId: string, coordinatorId: string): Promise<MemberInfo> {
+    await this.circles.assertOwned(circleId, coordinatorId);
+    const existing = await this.prisma.membership.findFirst({
+      where: {
+        circleId,
+        userId: coordinatorId,
+        status: { in: ['INVITED', 'REQUESTED', 'ACTIVE'] },
+      },
+    });
+    if (existing) {
+      if (existing.status === 'ACTIVE') {
+        throw new ConflictException('You are already in this circle');
+      }
+      await this.circles.activate(existing.id);
+    } else {
+      const user = await this.prisma.user.findUniqueOrThrow({
+        where: { id: coordinatorId },
+      });
+      const created = await this.prisma.membership.create({
+        data: {
+          circleId,
+          userId: coordinatorId,
+          name: user.name,
+          phone: user.phone,
+          status: 'INVITED',
+        },
+      });
+      await this.circles.activate(created.id);
+    }
+    const membership = await this.prisma.membership.findFirstOrThrow({
+      where: { circleId, userId: coordinatorId },
+      include: { user: { select: { email: true } } },
+    });
+    const collectedIds = await this.circles.collectedMembershipIds(circleId);
+    return this.circles.toMemberInfo(
+      membership,
+      collectedIds,
+      membership.user?.email ?? null,
+    );
+  }
+
+  /** The coordinator leaves their own circle's rotation (soft-remove). */
+  async leaveSelf(
+    circleId: string,
+    coordinatorId: string,
+  ): Promise<{ removed: true }> {
+    await this.circles.assertOwned(circleId, coordinatorId);
+    const membership = await this.prisma.membership.findFirst({
+      where: { circleId, userId: coordinatorId, status: 'ACTIVE' },
+    });
+    if (!membership) {
+      throw new NotFoundException('You are not in this circle');
+    }
+    await this.prisma.membership.update({
+      where: { id: membership.id },
+      data: { status: 'REMOVED' },
+    });
+    return { removed: true };
+  }
+
   /** Coordinator approves a join request (REQUESTED → ACTIVE, gets a slot). */
   async approveRequest(
     circleId: string,

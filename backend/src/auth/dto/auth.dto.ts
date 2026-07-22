@@ -18,6 +18,8 @@ export class RegisterDto {
 
   @IsEmail({}, { message: 'enter a valid email address' })
   @MaxLength(160)
+  // Sign-up is Gmail-only — everyone on BookAm uses a Google/Gmail identity.
+  @Matches(/@gmail\.com$/i, { message: 'use a Gmail address (…@gmail.com)' })
   email!: string;
 
   @IsString()

@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
+import type { Circle } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   CirclesService,
@@ -30,7 +31,10 @@ export class PayoutsService {
     file: ReceiptFile | undefined,
     amountNaira?: number,
   ): Promise<PayoutInfo> {
-    const state = await this.openStateWithCollector(circleId, coordinatorId);
+    const { state, circle } = await this.openStateWithCollector(
+      circleId,
+      coordinatorId,
+    );
     const receiptFileUrl = await this.storage.save(file, 'payout');
     const pot = await this.circles.potNaira(state.cycle.id);
     const amount = resolveReceiptAmount(amountNaira, pot);
@@ -56,7 +60,10 @@ export class PayoutsService {
       where: { id: payout.id },
       include: payoutInclude,
     });
-    return this.circles.toPayoutInfo(withReceipts);
+    return this.circles.toPayoutInfo(
+      withReceipts,
+      circle.coordinatorFeePercent,
+    );
   }
 
   /**
@@ -68,7 +75,10 @@ export class PayoutsService {
     circleId: string,
     coordinatorId: string,
   ): Promise<CompletePayoutResult> {
-    const state = await this.openStateWithCollector(circleId, coordinatorId);
+    const { state, circle } = await this.openStateWithCollector(
+      circleId,
+      coordinatorId,
+    );
     const existing = await this.prisma.payout.findUnique({
       where: { cycleId: state.cycle.id },
     });
@@ -119,7 +129,7 @@ export class PayoutsService {
     });
 
     return {
-      payout: this.circles.toPayoutInfo(payout),
+      payout: this.circles.toPayoutInfo(payout, circle.coordinatorFeePercent),
       circleStatus: next ? 'ACTIVE' : 'COMPLETED',
       nextCycleIndex: next ? state.cycle.index + 1 : null,
       nextCollectorName: next?.name ?? null,
@@ -129,7 +139,7 @@ export class PayoutsService {
   private async openStateWithCollector(
     circleId: string,
     coordinatorId: string,
-  ): Promise<OpenCycleState> {
+  ): Promise<{ state: OpenCycleState; circle: Circle }> {
     const circle = await this.circles.assertOwned(circleId, coordinatorId);
     const state = await this.circles.openCycleState(circle);
     if (!state) {
@@ -140,6 +150,6 @@ export class PayoutsService {
         'Add members to the circle first — there is nobody to collect yet',
       );
     }
-    return state;
+    return { state, circle };
   }
 }

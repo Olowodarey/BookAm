@@ -464,20 +464,21 @@ function InviteMemberModal({
     <Modal title="Invite member" onClose={onClose}>
       <form onSubmit={(e) => void submit(e)} className="space-y-4">
         {error ? <ErrorNote message={error} /> : null}
-        <Field label="Their BookAm email">
+        <Field label="Their Gmail address">
           <input
             type="email"
             required
+            pattern="[^@\s]+@gmail\.com"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder="member@example.com"
+            placeholder="member@gmail.com"
             className={inputClass}
           />
         </Field>
         <p className="text-xs text-muted">
-          They must already have a BookAm account (that&apos;s how they upload
-          their own receipts). They&apos;ll get the invite on their dashboard
-          and join the rotation once they accept.
+          Invite by Gmail — they must already have a BookAm account (that&apos;s
+          how they upload their own receipts). They&apos;ll get the invite on
+          their dashboard and join the rotation once they accept.
         </p>
         <div className="flex justify-end gap-2">
           <Button

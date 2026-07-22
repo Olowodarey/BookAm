@@ -12,6 +12,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { LogoMark } from "@/components/landing/Nav";
 import { ApiError, memberApi, setToken } from "@/lib/member/api";
+import { clearSession } from "@/lib/auth/api";
 import type { MyCircleCard, SafeUser } from "@/lib/member/types";
 import { Spinner } from "@/components/admin/ui";
 
@@ -90,8 +91,8 @@ export default function MemberShell({ children }: { children: ReactNode }) {
   }
 
   const signOut = () => {
-    setToken(null);
-    router.replace("/login");
+    clearSession();
+    router.replace("/");
   };
 
   const activeCircleId = circleIdFromPath(pathname);

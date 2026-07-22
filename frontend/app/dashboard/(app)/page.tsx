@@ -137,6 +137,7 @@ function CreateCircleModal({
   const [amount, setAmount] = useState("");
   const [frequency, setFrequency] = useState<CircleFrequency>("WEEKLY");
   const [memberTarget, setMemberTarget] = useState("");
+  const [feePercent, setFeePercent] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -150,6 +151,7 @@ function CreateCircleModal({
         amountNaira: Number(amount),
         frequency,
         memberTarget: Number(memberTarget),
+        feePercent: feePercent.trim() === "" ? 0 : Number(feePercent),
       });
       onDone();
       router.push(`/dashboard/circles/${created.id}/members`);
@@ -202,24 +204,40 @@ function CreateCircleModal({
           </Field>
         </div>
 
-        <Field label="Number of members">
-          <input
-            type="number"
-            required
-            min={2}
-            max={200}
-            step={1}
-            inputMode="numeric"
-            value={memberTarget}
-            onChange={(e) => setMemberTarget(e.target.value)}
-            placeholder="10"
-            className={inputClass}
-          />
-        </Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Number of members">
+            <input
+              type="number"
+              required
+              min={2}
+              max={200}
+              step={1}
+              inputMode="numeric"
+              value={memberTarget}
+              onChange={(e) => setMemberTarget(e.target.value)}
+              placeholder="10"
+              className={inputClass}
+            />
+          </Field>
+          <Field label="Your fee (% of pot)">
+            <input
+              type="number"
+              min={0}
+              max={100}
+              step={1}
+              inputMode="numeric"
+              value={feePercent}
+              onChange={(e) => setFeePercent(e.target.value)}
+              placeholder="0"
+              className={inputClass}
+            />
+          </Field>
+        </div>
 
         <p className="text-xs text-muted">
-          BookAm only records who paid — contributions keep moving hand to hand
-          or by direct transfer, as always.
+          Your fee is your cut of each payout — every member sees it, and the
+          collector receives the pot minus your fee. BookAm only records who
+          paid; the money keeps moving hand to hand or by direct transfer.
         </p>
 
         <div className="flex justify-end gap-2">

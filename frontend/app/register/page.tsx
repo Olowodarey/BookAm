@@ -84,7 +84,7 @@ export default function RegisterPage() {
             Join your circle on BookAm
           </h1>
           <p className="text-sm text-muted">
-            Sign up with your email — or continue with Google. Want to run
+            Sign up with your Gmail — or continue with Google. Want to run
             circles yourself? Apply to be a collector after you join.
           </p>
 
@@ -102,14 +102,15 @@ export default function RegisterPage() {
             />
           </Field>
 
-          <Field label="Email address">
+          <Field label="Gmail address">
             <input
               type="email"
               required
               autoComplete="email"
+              pattern="[^@\s]+@gmail\.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@example.com"
+              placeholder="you@gmail.com"
               className={inputClass}
             />
           </Field>
