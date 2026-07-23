@@ -195,10 +195,16 @@ export const formatDeadline = (iso: string | null | undefined) =>
       })
     : "—";
 
-/** A <input type="datetime-local"> value ("YYYY-MM-DDTHH:MM") is WAT → UTC ISO. */
+/**
+ * A WAT date input → UTC ISO. Accepts both a `datetime-local` value
+ * ("YYYY-MM-DDTHH:MM") and a date-only value ("YYYY-MM-DD"), the latter
+ * treated as midnight WAT.
+ */
 export function watInputToISO(local: string): string {
+  // Date inputs omit the time; default to start of day so the string parses.
+  const withTime = local.includes("T") ? local : `${local}T00:00`;
   // West Africa Time is a fixed UTC+1 (no DST), so append the offset directly.
-  return new Date(`${local}:00+01:00`).toISOString();
+  return new Date(`${withTime}:00+01:00`).toISOString();
 }
 
 /** A UTC ISO instant → the WAT "YYYY-MM-DDTHH:MM" a datetime-local expects. */

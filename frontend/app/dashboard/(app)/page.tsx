@@ -6,11 +6,17 @@ import { useRouter } from "next/navigation";
 import { useDashboard } from "@/components/dashboard/DashboardShell";
 import {
   coordinatorApi,
+  formatDeadline,
   formatNaira,
   FREQUENCY_LABEL,
   watInputToISO,
 } from "@/lib/dashboard/api";
 import type { CircleFrequency, CircleSummary } from "@/lib/dashboard/types";
+import {
+  bufferSuggestion,
+  minusDays,
+  schedulePreview,
+} from "@/lib/dashboard/schedule";
 import {
   Button,
   Card,
@@ -139,17 +145,26 @@ function CreateCircleModal({
   const [frequency, setFrequency] = useState<CircleFrequency>("WEEKLY");
   const [memberTarget, setMemberTarget] = useState("");
   const [feePercent, setFeePercent] = useState("");
-  const [startDate, setStartDate] = useState("");
-  const [firstDueAt, setFirstDueAt] = useState("");
+  const [firstPayout, setFirstPayout] = useState("");
+  const [bufferDays, setBufferDays] = useState(
+    bufferSuggestion("WEEKLY").recommended,
+  );
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const deadlineHint =
-    frequency === "DAILY"
-      ? "Each round's deadline moves forward one day."
-      : frequency === "WEEKLY"
-        ? "Each round's deadline moves forward one week."
-        : "Each round's deadline moves forward one month.";
+  const buffer = bufferSuggestion(frequency);
+  // Live preview so the coordinator sees the real dates (with the buffer
+  // applied) before creating. Empty until they pick a first payout day.
+  const preview = firstPayout
+    ? schedulePreview(watInputToISO(firstPayout), bufferDays, frequency)
+    : [];
+
+  // Changing the frequency snaps the "pay by" buffer to that frequency's
+  // recommendation (each frequency offers a different, valid set of options).
+  const changeFrequency = (next: CircleFrequency) => {
+    setFrequency(next);
+    setBufferDays(bufferSuggestion(next).recommended);
+  };
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -162,8 +177,12 @@ function CreateCircleModal({
         frequency,
         memberTarget: Number(memberTarget),
         feePercent: feePercent.trim() === "" ? 0 : Number(feePercent),
-        ...(startDate ? { startDate: watInputToISO(startDate) } : {}),
-        ...(firstDueAt ? { firstDueAt: watInputToISO(firstDueAt) } : {}),
+        // Anchor on the payout day; the deadline is that minus the buffer. The
+        // backend advances the deadline by the frequency each round, so the
+        // same payout-to-deadline gap carries forward automatically.
+        ...(firstPayout
+          ? { firstDueAt: minusDays(watInputToISO(firstPayout), bufferDays) }
+          : {}),
       });
       onDone();
       router.push(`/dashboard/circles/${created.id}/members`);
@@ -206,7 +225,9 @@ function CreateCircleModal({
           <Field label="Frequency">
             <select
               value={frequency}
-              onChange={(e) => setFrequency(e.target.value as CircleFrequency)}
+              onChange={(e) =>
+                changeFrequency(e.target.value as CircleFrequency)
+              }
               className={inputClass}
             >
               <option value="DAILY">Daily</option>
@@ -247,27 +268,63 @@ function CreateCircleModal({
         </div>
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <Field label="Start date">
-            <input
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className={inputClass}
-            />
-          </Field>
-          <Field label="First round deadline (WAT)">
+          <Field label="First payout (WAT)">
             <input
               type="datetime-local"
-              value={firstDueAt}
-              onChange={(e) => setFirstDueAt(e.target.value)}
+              value={firstPayout}
+              onChange={(e) => setFirstPayout(e.target.value)}
               className={inputClass}
             />
           </Field>
+          <Field label="Members pay by">
+            <select
+              value={bufferDays}
+              onChange={(e) => setBufferDays(Number(e.target.value))}
+              disabled={buffer.options.length === 1}
+              className={inputClass}
+            >
+              {buffer.options.map((o) => (
+                <option key={o.days} value={o.days}>
+                  {o.label}
+                  {o.days === buffer.recommended ? " (suggested)" : ""}
+                </option>
+              ))}
+            </select>
+          </Field>
         </div>
-        <p className="text-xs text-muted">
-          Times are West Africa Time (WAT). {deadlineHint} You can adjust any
-          round&apos;s deadline later.
-        </p>
+
+        {preview.length > 0 ? (
+          <div className="rounded-2xl border border-line bg-white/60 p-3 text-xs">
+            <p className="mb-2 font-medium">
+              Schedule preview · repeats{" "}
+              {FREQUENCY_LABEL[frequency].toLowerCase()}
+            </p>
+            <ul className="space-y-1 text-muted">
+              {preview.map((r) => (
+                <li key={r.round}>
+                  <span className="font-medium text-green">
+                    Round {r.round}:
+                  </span>{" "}
+                  pay by {formatDeadline(r.dueAt)} → collector paid{" "}
+                  {formatDeadline(r.payoutAt)}
+                </li>
+              ))}
+            </ul>
+            <p className="mt-2 text-muted">
+              You can adjust any round&apos;s deadline later. Times are West
+              Africa Time (WAT).
+            </p>
+          </div>
+        ) : (
+          <p className="text-xs text-muted">
+            Pick the first payout day and we&apos;ll build the whole schedule —
+            each round&apos;s deadline lands{" "}
+            {bufferDays === 0
+              ? "on payout day"
+              : `${bufferDays} day${bufferDays === 1 ? "" : "s"} before payout`}
+            . Times are West Africa Time (WAT).
+          </p>
+        )}
 
         <p className="text-xs text-muted">
           Your fee is your cut of each payout — every member sees it, and the
