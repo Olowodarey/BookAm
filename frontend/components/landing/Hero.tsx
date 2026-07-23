@@ -40,7 +40,7 @@ export default function Hero() {
         </p>
 
         <div className="mt-8">
-          <WaitlistForm />
+          <WaitlistForm source="hero" />
         </div>
 
         <p className="mt-4 text-sm text-muted">

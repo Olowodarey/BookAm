@@ -28,6 +28,7 @@ const NAV_ITEMS = [
   { label: "Collector requests", href: "/admin/applications", icon: "M10 3a3 3 0 110 6 3 3 0 010-6zM4 17c0-3 2.7-5 6-5s6 2 6 5M14 6l2 2 3-3" },
   { label: "Subscriptions", href: "/admin/subscriptions", icon: "M3 5h14v10H3zM3 8h14M6 12h4" },
   { label: "Users", href: "/admin/users", icon: "M7 4a2.5 2.5 0 110 5 2.5 2.5 0 010-5zM13 5a2 2 0 110 4M2.5 16c0-2.5 2-4 4.5-4s4.5 1.5 4.5 4M12.5 12.5c2 .2 4 1.5 4 3.5" },
+  { label: "Waitlist", href: "/admin/waitlist", icon: "M3 5h14v10H3zM3 5l7 5 7-5" },
   { label: "Settings", href: "/admin/settings", icon: "M10 7a3 3 0 110 6 3 3 0 010-6zM10 2v2M10 16v2M2 10h2M16 10h2M4.5 4.5L6 6M14 14l1.5 1.5M15.5 4.5L14 6M6 14l-1.5 1.5" },
 ] as const;
 

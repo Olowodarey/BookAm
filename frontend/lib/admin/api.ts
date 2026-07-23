@@ -12,6 +12,7 @@ import type {
   SubscriptionStatus,
   UserDetail,
   UserStatus,
+  WaitlistList,
 } from "./types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
@@ -164,6 +165,9 @@ export const adminApi = {
     request<SafeUser>(`/admin/users/${id}/suspend`, { method: "POST" }),
   reactivateUser: (id: string) =>
     request<SafeUser>(`/admin/users/${id}/reactivate`, { method: "POST" }),
+
+  // Early-access waitlist (landing-page email signups)
+  waitlist: () => request<WaitlistList>("/admin/waitlist"),
 };
 
 export const formatNaira = (amount: number) =>

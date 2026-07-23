@@ -125,3 +125,15 @@ export interface PlanInput {
   features?: string[];
   active?: boolean;
 }
+
+export interface WaitlistEntry {
+  id: string;
+  email: string;
+  source: string | null;
+  createdAt: string;
+}
+
+export interface WaitlistList {
+  total: number;
+  entries: WaitlistEntry[];
+}

@@ -2,16 +2,47 @@
 
 import { useId, useState, type FormEvent } from "react";
 
-export default function WaitlistForm() {
-  const inputId = useId();
-  const [whatsappNumber, setWhatsappNumber] = useState("");
-  const [submitted, setSubmitted] = useState(false);
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+export default function WaitlistForm({ source }: { source?: string }) {
+  const inputId = useId();
+  const [email, setEmail] = useState("");
+  const [submitted, setSubmitted] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!whatsappNumber.trim()) return;
-    // TODO: POST the number to a route handler / backend (e.g. app/api/waitlist/route.ts)
-    setSubmitted(true);
+    const value = email.trim();
+    if (!value) return;
+    setError(null);
+    setSubmitting(true);
+    try {
+      const res = await fetch(`${API_URL}/waitlist`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: value, ...(source ? { source } : {}) }),
+      });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => null)) as {
+          message?: string | string[];
+        } | null;
+        const msg = data?.message;
+        throw new Error(
+          Array.isArray(msg)
+            ? msg.join(", ")
+            : msg ?? "Something went wrong — please try again.",
+        );
+      }
+      setSubmitted(true);
+    } catch (err) {
+      setError(
+        err instanceof Error && err.message
+          ? err.message
+          : "Could not reach us — please try again.",
+      );
+      setSubmitting(false);
+    }
   }
 
   if (submitted) {
@@ -30,36 +61,44 @@ export default function WaitlistForm() {
         >
           <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l5 5 10-11" />
         </svg>
-        Thank you — we&apos;ll reach out on WhatsApp.
+        You&apos;re on the list — we&apos;ll reach out by email.
       </p>
     );
   }
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      className="flex w-full max-w-md flex-col gap-2.5 sm:flex-row"
-    >
-      <label htmlFor={inputId} className="sr-only">
-        Your WhatsApp number
-      </label>
-      <input
-        id={inputId}
-        type="tel"
-        inputMode="tel"
-        autoComplete="tel"
-        required
-        value={whatsappNumber}
-        onChange={(event) => setWhatsappNumber(event.target.value)}
-        placeholder="Your WhatsApp number"
-        className="w-full flex-1 rounded-xl border-2 border-ink/20 bg-white px-4 py-3 text-ink placeholder:text-muted"
-      />
-      <button
-        type="submit"
-        className="shrink-0 rounded-xl bg-green px-5 py-3 font-semibold text-paper transition-colors hover:bg-green-deep"
+    <div className="w-full max-w-md">
+      <form
+        onSubmit={handleSubmit}
+        className="flex w-full flex-col gap-2.5 sm:flex-row"
       >
-        Get early access
-      </button>
-    </form>
+        <label htmlFor={inputId} className="sr-only">
+          Your email address
+        </label>
+        <input
+          id={inputId}
+          type="email"
+          inputMode="email"
+          autoComplete="email"
+          required
+          value={email}
+          onChange={(event) => setEmail(event.target.value)}
+          placeholder="Your Gmail address"
+          className="w-full flex-1 rounded-xl border-2 border-ink/20 bg-white px-4 py-3 text-ink placeholder:text-muted"
+        />
+        <button
+          type="submit"
+          disabled={submitting}
+          className="shrink-0 rounded-xl bg-green px-5 py-3 font-semibold text-paper transition-colors hover:bg-green-deep disabled:opacity-60"
+        >
+          {submitting ? "Adding…" : "Get early access"}
+        </button>
+      </form>
+      {error ? (
+        <p role="alert" className="mt-2 text-sm font-medium text-red-600">
+          {error}
+        </p>
+      ) : null}
+    </div>
   );
 }

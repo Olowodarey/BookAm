@@ -7,6 +7,7 @@ import { AuthModule } from './auth/auth.module';
 import { AdminModule } from './admin/admin.module';
 import { CirclesModule } from './circles/circles.module';
 import { MemberModule } from './member/member.module';
+import { WaitlistModule } from './waitlist/waitlist.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { MemberModule } from './member/member.module';
     AdminModule,
     CirclesModule,
     MemberModule,
+    WaitlistModule,
   ],
   controllers: [AppController],
   providers: [AppService],

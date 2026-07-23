@@ -9,11 +9,11 @@ export default function FinalCta() {
           Be the first coordinator on BookAm.
         </h2>
         <p className="mt-4 max-w-lg text-lg leading-relaxed text-ink/75">
-          Drop your WhatsApp number and we&apos;ll reach out when early access
-          opens for your area.
+          Drop your email and we&apos;ll reach out when early access opens for
+          your area.
         </p>
         <div className="mt-8 flex w-full justify-center">
-          <WaitlistForm />
+          <WaitlistForm source="final-cta" />
         </div>
         <p className="mt-6 text-sm text-ink/70">
           Already run an ajo?{" "}

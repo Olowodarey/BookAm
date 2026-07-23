@@ -415,3 +415,17 @@ model AppealVote {
   // One vote per member per appeal (changeable until the appeal is decided).
   @@unique([appealId, voterId])
 }
+
+/**
+ * Landing-page early-access signups. Just an email (Gmail), captured before a
+ * person has any account. Unique so re-submitting is a no-op; `source` records
+ * which section of the site they signed up from.
+ */
+model WaitlistEntry {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  source    String?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
