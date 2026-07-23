@@ -25,6 +25,9 @@ export interface MyCircleCard {
   membershipId: string;
   myPosition: number;
   cycleIndex: number | null;
+  /** This round's contribution deadline (the pay-by day); null when no cycle
+   *  is open. Shown to contributors so they know when to pay. */
+  dueAt: Date | null;
   /** My contribution status this cycle; null when no cycle is open. */
   myStatus: ContributionStatus | null;
   myRejectionReason: string | null;

@@ -3,7 +3,12 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useMember } from "@/components/member/MemberShell";
-import { formatNaira, FREQUENCY_LABEL, memberApi } from "@/lib/member/api";
+import {
+  formatDeadline,
+  formatNaira,
+  FREQUENCY_LABEL,
+  memberApi,
+} from "@/lib/member/api";
 import type {
   CircleInvite,
   MyCircleCard,
@@ -91,6 +96,18 @@ export default function MyCirclesPage() {
               </p>
 
               <p className="mt-3 text-sm text-ink/80">{myStatusLine(circle)}</p>
+              {circle.dueAt && circle.cycleIndex ? (
+                <p
+                  className={`mt-1.5 text-xs font-semibold ${
+                    circle.myStatus === "AWAITING" ||
+                    circle.myStatus === "REJECTED"
+                      ? "text-[#996414]"
+                      : "text-muted"
+                  }`}
+                >
+                  Pay by {formatDeadline(circle.dueAt)}
+                </p>
+              ) : null}
               <p className="mt-1.5 rounded-xl bg-gold/10 px-3 py-2 text-sm font-semibold text-green-deep">
                 {turnLine(circle)}
               </p>

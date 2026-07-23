@@ -91,6 +91,7 @@ export class MemberService {
           membershipId: membership.id,
           myPosition: membership.position,
           cycleIndex: state?.cycle.index ?? null,
+          dueAt: state?.cycle.dueAt ?? null,
           myStatus: mine?.status ?? null,
           myRejectionReason: mine?.rejectionReason ?? null,
           collectorName: state?.collector?.name ?? null,
