@@ -23,3 +23,8 @@ Thumbs.db
 *.log
 npm-debug.log*
 pnpm-debug.log*
+
+# AI agent / local dev notes (keep private, local-only)
+CLAUDE.md
+Claude.MD
+.claude/
