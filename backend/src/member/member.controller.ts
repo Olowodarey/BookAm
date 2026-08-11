@@ -80,6 +80,14 @@ export class MemberController {
     return this.member.circleDetail(circleId, user.id);
   }
 
+  @Get('circles/:circleId/rounds')
+  circleRounds(
+    @CurrentUser() user: SafeUser,
+    @Param('circleId') circleId: string,
+  ) {
+    return this.member.circleRounds(circleId, user.id);
+  }
+
   @Post('circles/:circleId/receipt')
   @UseInterceptors(
     FileInterceptor('file', { limits: { fileSize: MAX_RECEIPT_BYTES } }),

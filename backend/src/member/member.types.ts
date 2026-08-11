@@ -3,6 +3,7 @@ import type {
   CircleFrequency,
   CircleStatus,
   ContributionStatus,
+  CycleStatus,
   PayoutStatus,
 } from '@prisma/client';
 
@@ -128,6 +129,47 @@ export interface PayoutAccount {
   accountNumber: string;
   accountName: string | null;
   altPhone: string | null;
+}
+
+/** One member's line in a past/present round's history — what they paid and
+ *  whether it was verified, kept as a shared record. */
+export interface MemberRoundMember {
+  membershipId: string;
+  name: string;
+  position: number;
+  isMe: boolean;
+  status: ContributionStatus | null;
+  /** How much they paid that round (sum of their receipts). */
+  paidNaira: number;
+}
+
+/**
+ * A single round (cycle) in a circle's history — who collected the pot, what
+ * everyone paid, and when. Powers the member "Rounds" view so a saver can look
+ * back at any round, not just the open one.
+ */
+export interface MemberRoundSummary {
+  cycleId: string;
+  /** 1-based round number. */
+  index: number;
+  status: CycleStatus;
+  /** When the round opened. */
+  startedAt: Date;
+  /** The pay-by deadline for the round (WAT), or null. */
+  dueAt: Date | null;
+  /** When the round was closed out, or null while still open. */
+  completedAt: Date | null;
+  /** Whose turn it was to collect the pot this round. */
+  collectorName: string | null;
+  collectorPosition: number | null;
+  /** It was my turn to collect this round. */
+  isMyTurn: boolean;
+  /** The pot for the round (sum of PAID contributions). */
+  potNaira: number;
+  paidCount: number;
+  memberCount: number;
+  /** Every member's contribution line for the round, by position. */
+  members: MemberRoundMember[];
 }
 
 export interface MemberCircleDetail {

@@ -5,6 +5,7 @@ import type {
   LoginResponse,
   MemberCircleDetail,
   MyCircleCard,
+  MemberRoundSummary,
   MyCollectorApplication,
   MyContribution,
   OtpSentResponse,
@@ -148,6 +149,9 @@ export const memberApi = {
   myCircles: () => request<MyCircleCard[]>("/member/circles"),
   circleDetail: (circleId: string) =>
     request<MemberCircleDetail>(`/member/circles/${circleId}`),
+  // Every round the circle has run — who collected, what everyone paid, when.
+  circleRounds: (circleId: string) =>
+    request<MemberRoundSummary[]>(`/member/circles/${circleId}/rounds`),
 
   // Circle invites (coordinator invited me by email → I accept/decline)
   myInvites: () => request<CircleInvite[]>("/member/invites"),

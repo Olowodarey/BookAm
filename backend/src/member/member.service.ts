@@ -27,6 +27,8 @@ import type {
   MyCircleCard,
   MyCollectorApplication,
   MyContribution,
+  MemberRoundMember,
+  MemberRoundSummary,
   RotationSlot,
 } from './member.types';
 
@@ -265,6 +267,59 @@ export class MemberService {
         contribution: this.toMyContribution(myContribution, circle),
       },
     };
+  }
+
+  /**
+   * The circle's rounds, newest first — who collected, what everyone paid and
+   * when, for every round the circle has run (not just the open one). Read-only
+   * history so a saver can look back at any past round.
+   */
+  async circleRounds(
+    circleId: string,
+    userId: string,
+  ): Promise<MemberRoundSummary[]> {
+    const me = await this.requireMembership(circleId, userId);
+    const cycles = await this.prisma.cycle.findMany({
+      where: { circleId },
+      orderBy: { index: 'desc' },
+      include: {
+        collector: true,
+        contributions: {
+          where: { membership: { status: 'ACTIVE' } },
+          include: { receipts: true, membership: true },
+        },
+      },
+    });
+
+    return cycles.map((cycle) => {
+      const members: MemberRoundMember[] = cycle.contributions
+        .map((c) => ({
+          membershipId: c.membershipId,
+          name: c.membership.name,
+          position: c.membership.position,
+          isMe: c.membershipId === me.id,
+          status: c.status,
+          paidNaira: c.receipts.reduce((sum, r) => sum + r.amountNaira, 0),
+        }))
+        .sort((a, b) => a.position - b.position);
+
+      const paid = cycle.contributions.filter((c) => c.status === 'PAID');
+      return {
+        cycleId: cycle.id,
+        index: cycle.index,
+        status: cycle.status,
+        startedAt: cycle.startedAt,
+        dueAt: cycle.dueAt,
+        completedAt: cycle.completedAt,
+        collectorName: cycle.collector?.name ?? null,
+        collectorPosition: cycle.collector?.position ?? null,
+        isMyTurn: cycle.collectorId === me.id,
+        potNaira: paid.reduce((sum, c) => sum + c.amountNaira, 0),
+        paidCount: paid.length,
+        memberCount: cycle.contributions.length,
+        members,
+      };
+    });
   }
 
   /**

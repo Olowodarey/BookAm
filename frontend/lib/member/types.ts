@@ -28,6 +28,8 @@ import type {
   PayoutStatus,
 } from "../dashboard/types";
 
+export type CycleStatus = "OPEN" | "COMPLETED";
+
 export type AppealStatus = "OPEN" | "APPROVED" | "REJECTED" | "WITHDRAWN";
 export type VoteValue = "SUPPORT" | "OPPOSE";
 export type ApplicationStatus = "PENDING" | "APPROVED" | "REJECTED";
@@ -134,6 +136,37 @@ export interface MemberPayout {
   collectorName: string | null;
   receipts: MemberReceipt[];
   completedAt: string | null;
+}
+
+/** One member's line in a past/present round's history. */
+export interface MemberRoundMember {
+  membershipId: string;
+  name: string;
+  position: number;
+  isMe: boolean;
+  status: ContributionStatus | null;
+  /** How much they paid that round (sum of their receipts). */
+  paidNaira: number;
+}
+
+/**
+ * A single round (cycle) in a circle's history — who collected the pot, what
+ * everyone paid, and when. Powers the member "Rounds" view.
+ */
+export interface MemberRoundSummary {
+  cycleId: string;
+  index: number;
+  status: CycleStatus;
+  startedAt: string;
+  dueAt: string | null;
+  completedAt: string | null;
+  collectorName: string | null;
+  collectorPosition: number | null;
+  isMyTurn: boolean;
+  potNaira: number;
+  paidCount: number;
+  memberCount: number;
+  members: MemberRoundMember[];
 }
 
 export interface MemberCircleDetail {

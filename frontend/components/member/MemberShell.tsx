@@ -32,6 +32,7 @@ export function useMember(): MemberContextValue {
 
 const CIRCLE_NAV = [
   { label: "Overview", segment: "" },
+  { label: "Rounds", segment: "rounds" },
   { label: "Members", segment: "members" },
   { label: "Appeals", segment: "appeals" },
 ] as const;
