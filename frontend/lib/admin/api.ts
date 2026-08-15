@@ -54,6 +54,9 @@ async function request<T>(
   let response: Response;
   try {
     response = await fetch(url, {
+      // Never serve a cached GET — screens re-fetch after mutations and a
+      // cached response would show stale data until a hard reload.
+      cache: "no-store",
       method: options.method ?? "GET",
       headers: {
         ...(options.body !== undefined

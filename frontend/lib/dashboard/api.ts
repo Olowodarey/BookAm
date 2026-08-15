@@ -74,7 +74,10 @@ async function parseError(response: Response): Promise<ApiError> {
 async function send<T>(path: string, init: RequestInit): Promise<T> {
   let response: Response;
   try {
-    response = await fetch(new URL(path, API_URL), init);
+    // Never let the browser serve a cached GET — after any mutation the app
+    // re-fetches to refresh the screen, and a cached response would show stale
+    // data until a hard reload.
+    response = await fetch(new URL(path, API_URL), { cache: "no-store", ...init });
   } catch {
     throw new ApiError(
       0,
