@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { join } from 'path';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { UuidSubscriber } from './database/uuid.subscriber';
@@ -21,8 +22,12 @@ import { SettingsModule } from './settings/settings.module';
         url: config.get<string>('DATABASE_URL'),
         autoLoadEntities: true,
         subscribers: [UuidSubscriber],
-        // Schema is managed by TypeORM migrations (see src/database).
+        // Schema is managed by migrations, never auto-sync. Migrations run on
+        // boot (migrationsRun) so a deploy applies pending schema changes within
+        // the app's own connection — no separate/fragile preDeploy step needed.
         synchronize: false,
+        migrationsRun: true,
+        migrations: [join(__dirname, 'database', 'migrations', '*.{js,ts}')],
       }),
     }),
     AuthModule,
