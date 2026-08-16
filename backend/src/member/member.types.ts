@@ -6,6 +6,7 @@ import type {
   CycleStatus,
   PayoutStatus,
 } from '../entities';
+import type { ReceiptRecord } from '../circles/circles.types';
 
 /**
  * Response shapes for the member (contributor) API. The frontend mirrors
@@ -141,6 +142,8 @@ export interface MemberRoundMember {
   status: ContributionStatus | null;
   /** How much they paid that round (sum of their receipts). */
   paidNaira: number;
+  /** Their proof-of-payment receipts for the round — the shared evidence. */
+  receipts: ReceiptRecord[];
 }
 
 /**
@@ -170,6 +173,8 @@ export interface MemberRoundSummary {
   memberCount: number;
   /** Every member's contribution line for the round, by position. */
   members: MemberRoundMember[];
+  /** Receipts proving the collector was paid the pot for this round. */
+  payoutReceipts: ReceiptRecord[];
 }
 
 export interface MemberCircleDetail {

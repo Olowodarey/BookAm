@@ -147,6 +147,8 @@ export interface MemberRoundMember {
   status: ContributionStatus | null;
   /** How much they paid that round (sum of their receipts). */
   paidNaira: number;
+  /** Their proof-of-payment receipts for the round — the shared evidence. */
+  receipts: MemberReceipt[];
 }
 
 /**
@@ -167,6 +169,8 @@ export interface MemberRoundSummary {
   paidCount: number;
   memberCount: number;
   members: MemberRoundMember[];
+  /** Receipts proving the collector was paid the pot for this round. */
+  payoutReceipts: MemberReceipt[];
 }
 
 export interface MemberCircleDetail {

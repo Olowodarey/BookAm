@@ -13,6 +13,7 @@ import {
   Spinner,
 } from "@/components/admin/ui";
 import { ContributionBadge } from "@/components/dashboard/ui";
+import { ReceiptLedger } from "@/components/circles/ReceiptLedger";
 
 /**
  * Round history — every round the circle has run, newest first. Tap a round to
@@ -179,36 +180,54 @@ function RoundCard({
               {round.members.map((m) => (
                 <li
                   key={m.membershipId}
-                  className={`flex items-center gap-3 py-2.5 ${
+                  className={`py-2.5 ${
                     m.isMe ? "-mx-4 rounded-lg bg-gold/10 px-4 sm:-mx-5 sm:px-5" : ""
                   }`}
                 >
-                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-green/10 font-mono text-xs font-bold text-green">
-                    {m.position}
-                  </span>
-                  <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink">
-                    {m.name}
-                    {m.isMe ? (
-                      <span className="ml-1 text-muted">(you)</span>
-                    ) : null}
-                  </span>
-                  {m.status ? <ContributionBadge status={m.status} /> : null}
-                  <span
-                    className={`w-24 shrink-0 text-right font-mono text-sm font-bold ${
-                      m.paidNaira > 0 ? "text-ink" : "text-muted"
-                    }`}
-                  >
-                    {formatNaira(m.paidNaira)}
-                    {m.paidNaira > 0 && m.paidNaira < contributionNaira ? (
-                      <span className="block text-[10px] font-normal text-muted">
-                        of {formatNaira(contributionNaira)}
-                      </span>
-                    ) : null}
-                  </span>
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-green/10 font-mono text-xs font-bold text-green">
+                      {m.position}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink">
+                      {m.name}
+                      {m.isMe ? (
+                        <span className="ml-1 text-muted">(you)</span>
+                      ) : null}
+                    </span>
+                    {m.status ? <ContributionBadge status={m.status} /> : null}
+                    <span
+                      className={`w-24 shrink-0 text-right font-mono text-sm font-bold ${
+                        m.paidNaira > 0 ? "text-ink" : "text-muted"
+                      }`}
+                    >
+                      {formatNaira(m.paidNaira)}
+                      {m.paidNaira > 0 && m.paidNaira < contributionNaira ? (
+                        <span className="block text-[10px] font-normal text-muted">
+                          of {formatNaira(contributionNaira)}
+                        </span>
+                      ) : null}
+                    </span>
+                  </div>
+                  {/* Proof of payment — tap a receipt to view it. */}
+                  {m.receipts.length > 0 ? (
+                    <div className="mt-2 pl-10">
+                      <ReceiptLedger receipts={m.receipts} />
+                    </div>
+                  ) : null}
                 </li>
               ))}
             </ul>
           )}
+
+          {/* The pot's payout evidence — proof the collector was paid. */}
+          {round.payoutReceipts.length > 0 ? (
+            <div className="mt-4 border-t border-line/70 pt-3">
+              <p className="mb-2 font-mono text-[10px] font-bold uppercase tracking-wide text-ink/60">
+                Payout to {round.collectorName ?? "the collector"} · proof
+              </p>
+              <ReceiptLedger receipts={round.payoutReceipts} />
+            </div>
+          ) : null}
         </div>
       ) : null}
     </Card>

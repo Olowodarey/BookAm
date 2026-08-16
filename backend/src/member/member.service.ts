@@ -317,7 +317,8 @@ export class MemberService {
       order: { index: 'DESC' },
       relations: {
         collector: true,
-        contributions: { receipts: true, membership: true },
+        contributions: { receipts: { uploadedBy: true }, membership: true },
+        payout: { receipts: { uploadedBy: true } },
       },
     });
 
@@ -328,14 +329,19 @@ export class MemberService {
         (c) => c.membership.status === 'ACTIVE',
       );
       const members: MemberRoundMember[] = contribs
-        .map((c) => ({
-          membershipId: c.membershipId,
-          name: c.membership.name,
-          position: c.membership.position,
-          isMe: c.membershipId === me.id,
-          status: c.status,
-          paidNaira: c.receipts.reduce((sum, r) => sum + r.amountNaira, 0),
-        }))
+        .map((c) => {
+          const receipts = byCreatedAt(c.receipts);
+          return {
+            membershipId: c.membershipId,
+            name: c.membership.name,
+            position: c.membership.position,
+            isMe: c.membershipId === me.id,
+            status: c.status,
+            paidNaira: receipts.reduce((sum, r) => sum + r.amountNaira, 0),
+            // The proof-of-payment ledger — kept as the shared record.
+            receipts: receipts.map((r) => this.circles.toReceiptRecord(r)),
+          };
+        })
         .sort((a, b) => a.position - b.position);
 
       const paid = contribs.filter((c) => c.status === 'PAID');
@@ -353,6 +359,12 @@ export class MemberService {
         paidCount: paid.length,
         memberCount: contribs.length,
         members,
+        // Proof the collector was paid the pot (the "amount collected").
+        payoutReceipts: cycle.payout
+          ? byCreatedAt(cycle.payout.receipts).map((r) =>
+              this.circles.toReceiptRecord(r),
+            )
+          : [],
       };
     });
   }
