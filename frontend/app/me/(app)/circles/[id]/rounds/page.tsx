@@ -101,14 +101,22 @@ function RoundCard({
         : round.collectorName;
 
   return (
-    <Card className="overflow-hidden p-0">
+    <Card
+      className={`overflow-hidden border-2 border-ink bg-white p-0 transition-shadow ${
+        open
+          ? "shadow-[6px_6px_0_0_rgba(15,90,64,0.16)]"
+          : "shadow-[4px_4px_0_0_rgba(15,90,64,0.10)]"
+      }`}
+    >
       <button
         type="button"
         onClick={onToggle}
         aria-expanded={open}
-        className="flex w-full items-center gap-3 px-4 py-4 text-left transition-colors hover:bg-ink/[0.02] sm:px-5"
+        className={`flex w-full items-center gap-3 px-4 py-4 text-left transition-colors hover:bg-ink/[0.03] sm:px-5 ${
+          open ? "bg-ink/[0.02]" : ""
+        }`}
       >
-        <span className="flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-xl bg-green/10 font-mono text-green">
+        <span className="flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-xl border-2 border-green/25 bg-green/10 font-mono text-green">
           <span className="text-[9px] font-bold uppercase leading-none tracking-wide">
             Rnd
           </span>
@@ -167,7 +175,7 @@ function RoundCard({
       </button>
 
       {open ? (
-        <div className="border-t border-line/70 px-4 py-3 sm:px-5">
+        <div className="border-t-2 border-ink/15 bg-paper/40 px-4 py-3 sm:px-5">
           <p className="mb-2 font-mono text-[10px] font-bold uppercase tracking-wide text-ink/60">
             What everyone paid this round
           </p>
@@ -210,7 +218,7 @@ function RoundCard({
                   </div>
                   {/* Proof of payment — tap a receipt to view it. */}
                   {m.receipts.length > 0 ? (
-                    <div className="mt-2 pl-10">
+                    <div className="ml-3.5 mt-2 border-l-2 border-green/30 pl-4">
                       <ReceiptLedger receipts={m.receipts} />
                     </div>
                   ) : null}
@@ -221,8 +229,8 @@ function RoundCard({
 
           {/* The pot's payout evidence — proof the collector was paid. */}
           {round.payoutReceipts.length > 0 ? (
-            <div className="mt-4 border-t border-line/70 pt-3">
-              <p className="mb-2 font-mono text-[10px] font-bold uppercase tracking-wide text-ink/60">
+            <div className="mt-4 rounded-xl border-2 border-gold/40 bg-gold/[0.06] px-3 py-3">
+              <p className="mb-2 font-mono text-[10px] font-bold uppercase tracking-wide text-[#996414]">
                 Payout to {round.collectorName ?? "the collector"} · proof
               </p>
               <ReceiptLedger receipts={round.payoutReceipts} />
