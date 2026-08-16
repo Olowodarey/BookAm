@@ -39,9 +39,14 @@ export default function WaitlistPage() {
   }, []);
 
   useEffect(() => {
-    void load();
-    const t = setInterval(() => void load(), REFRESH_MS);
-    return () => clearInterval(t);
+    // Defer the initial load (setTimeout) so it doesn't setState synchronously
+    // in the effect body; the interval then polls for the "real time" feel.
+    const initial = setTimeout(load, 0);
+    const t = setInterval(load, REFRESH_MS);
+    return () => {
+      clearTimeout(initial);
+      clearInterval(t);
+    };
   }, [load]);
 
   const copyEmails = async () => {
