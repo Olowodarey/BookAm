@@ -1,5 +1,6 @@
 import 'reflect-metadata';
 import 'dotenv/config';
+import { join } from 'path';
 import { DataSource } from 'typeorm';
 import { entities } from '../entities';
 import { UuidSubscriber } from './uuid.subscriber';
@@ -14,6 +15,8 @@ export const AppDataSource = new DataSource({
   url: process.env.DATABASE_URL,
   entities,
   subscribers: [UuidSubscriber],
-  migrations: ['src/database/migrations/*.ts'],
+  // __dirname-relative so it matches .ts under ts-node (local) and the compiled
+  // .js under dist (Railway production preDeploy).
+  migrations: [join(__dirname, 'migrations', '*.{ts,js}')],
   synchronize: false,
 });

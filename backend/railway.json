@@ -1,6 +1,9 @@
 {
   "$schema": "https://railway.com/railway.schema.json",
   "deploy": {
-    "preDeployCommand": ["npx prisma migrate deploy"]
+    "preDeployCommand": [
+      "npx typeorm migration:run -d dist/database/data-source.js",
+      "node dist/database/seed.js"
+    ]
   }
 }
