@@ -24,29 +24,28 @@ import {
 } from "@/components/admin/ui";
 import { ContributionBadge } from "@/components/dashboard/ui";
 
-/** The reassurance line: where am I in the queue, in plain words. */
-function turnLine(circle: MyCircleCard): string {
-  if (circle.hasCollected) return "You have collected your payout this rotation 🎉";
-  if (circle.iCollectNow) return "It's your turn to collect — the pot is coming to you!";
-  if (circle.turnsUntilCollect === 1) return "You collect next — just one turn to go.";
-  if (circle.turnsUntilCollect !== null)
-    return `You collect in about ${circle.turnsUntilCollect} turns.`;
-  return "Your turn will show here once the rotation starts.";
-}
-
-function myStatusLine(circle: MyCircleCard): string {
-  switch (circle.myStatus) {
-    case "PAID":
-      return "You're paid up for this round ✓";
-    case "PENDING_REVIEW":
-      return "Receipt sent — waiting for your coordinator to confirm.";
-    case "REJECTED":
-      return "Your receipt needs another look — please re-upload.";
-    case "AWAITING":
-      return "This round's contribution is still open.";
-    default:
-      return "No round is open right now.";
+/**
+ * The single most useful line for a card at a glance. Owing money comes first
+ * (it needs action), then whose turn it is — the deeper breakdown lives on the
+ * circle page, so we keep this to one adaptive line.
+ */
+function cardHint(circle: MyCircleCard): { text: string; needsAction: boolean } {
+  if (circle.myStatus === "AWAITING" || circle.myStatus === "REJECTED") {
+    return { text: "Your contribution is due", needsAction: true };
   }
+  if (circle.iCollectNow) {
+    return { text: "It's your turn to collect 🎉", needsAction: false };
+  }
+  if (circle.myStatus === "PENDING_REVIEW") {
+    return { text: "Receipt under review", needsAction: false };
+  }
+  if (circle.turnsUntilCollect === 1) {
+    return { text: "You collect next", needsAction: false };
+  }
+  if (circle.hasCollected) {
+    return { text: "Collected this rotation", needsAction: false };
+  }
+  return { text: "You're up to date", needsAction: false };
 }
 
 export default function MyCirclesPage() {
@@ -95,43 +94,24 @@ export default function MyCirclesPage() {
                 {FREQUENCY_LABEL[circle.frequency]}
               </p>
 
-              <p className="mt-3 text-sm text-ink/80">{myStatusLine(circle)}</p>
-              {circle.dueAt && circle.cycleIndex ? (
-                <p
-                  className={`mt-1.5 text-xs font-semibold ${
-                    circle.myStatus === "AWAITING" ||
-                    circle.myStatus === "REJECTED"
-                      ? "text-[#996414]"
-                      : "text-muted"
-                  }`}
-                >
-                  Pay by {formatDeadline(circle.dueAt)}
-                </p>
-              ) : null}
-              <p className="mt-1.5 rounded-xl bg-gold/10 px-3 py-2 text-sm font-semibold text-green-deep">
-                {turnLine(circle)}
-              </p>
-
-              <div className="mt-3 flex items-center justify-between text-xs text-muted">
-                <span>
-                  Position{" "}
-                  <span className="font-mono font-bold text-ink">
-                    {circle.myPosition}
-                  </span>{" "}
-                  of {circle.memberCount}
-                </span>
-                <span>
-                  <span className="font-mono font-bold text-green">
-                    {circle.paidCount}
-                  </span>{" "}
-                  / {circle.memberCount} paid
-                </span>
-                {circle.openAppeals > 0 ? (
-                  <span className="rounded-full bg-gold/15 px-2 py-0.5 font-mono font-bold text-[#996414]">
-                    {circle.openAppeals} appeal{circle.openAppeals > 1 ? "s" : ""}
-                  </span>
-                ) : null}
-              </div>
+              {(() => {
+                const hint = cardHint(circle);
+                return (
+                  <p
+                    className={`mt-3 text-sm font-semibold ${
+                      hint.needsAction ? "text-[#996414]" : "text-ink/70"
+                    }`}
+                  >
+                    {hint.text}
+                    {hint.needsAction && circle.dueAt ? (
+                      <span className="font-normal text-muted">
+                        {" "}
+                        · by {formatDeadline(circle.dueAt)}
+                      </span>
+                    ) : null}
+                  </p>
+                );
+              })()}
             </Link>
           ))}
         </div>
