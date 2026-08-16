@@ -288,12 +288,12 @@ function CollectorApplicationStatus() {
           ) : null}
           . You can apply again on the{" "}
           <Link
-            href="/become-a-collector"
+            href="/me/become-collector"
             className="font-semibold text-green underline underline-offset-2"
           >
-            collector page
-          </Link>
-          .
+            become a collector
+          </Link>{" "}
+          page.
         </p>
       ) : (
         <p className="mt-1.5 text-sm text-ink/80">
