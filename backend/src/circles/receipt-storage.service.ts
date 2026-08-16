@@ -22,7 +22,7 @@ const ALLOWED_TYPES: Record<string, string> = {
   'application/pdf': '.pdf',
 };
 
-export const MAX_RECEIPT_BYTES = 5 * 1024 * 1024;
+export const MAX_RECEIPT_BYTES = 2 * 1024 * 1024;
 
 interface R2Config {
   client: S3Client;
@@ -97,7 +97,7 @@ export class ReceiptStorageService {
       );
     }
     if (file.size > MAX_RECEIPT_BYTES) {
-      throw new BadRequestException('Receipt file is too large (max 5 MB)');
+      throw new BadRequestException('Receipt file is too large (max 2 MB)');
     }
 
     const name = `${prefix}-${randomBytes(10).toString('hex')}${ext}`;
