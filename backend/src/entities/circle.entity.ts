@@ -13,7 +13,7 @@ import { CircleFrequency, CircleStatus } from './enums';
 import { User } from './user.entity';
 import { Membership } from './membership.entity';
 import { Cycle } from './cycle.entity';
-import { Appeal } from './appeal.entity';
+import { SwapRequest } from './swap-request.entity';
 
 /** A rotating savings circle (ajo/esusu). Every money field is a label on a record — BookAm never holds the pot. */
 @Entity('Circle')
@@ -63,6 +63,6 @@ export class Circle extends UuidEntity {
   @OneToMany(() => Cycle, (c) => c.circle)
   cycles!: Cycle[];
 
-  @OneToMany(() => Appeal, (a) => a.circle)
-  appeals!: Appeal[];
+  @OneToMany(() => SwapRequest, (s) => s.circle)
+  swapRequests!: SwapRequest[];
 }

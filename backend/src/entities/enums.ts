@@ -86,16 +86,18 @@ export const PayoutStatus = {
 } as const;
 export type PayoutStatus = (typeof PayoutStatus)[keyof typeof PayoutStatus];
 
-export const AppealStatus = {
-  OPEN: 'OPEN',
-  APPROVED: 'APPROVED',
+export const SwapStatus = {
+  // Awaiting the target member's response.
+  PENDING: 'PENDING',
+  // Target agreed; awaiting the coordinator's confirmation.
+  ACCEPTED: 'ACCEPTED',
+  // Coordinator confirmed — the two positions have been swapped (success).
+  CONFIRMED: 'CONFIRMED',
+  // Target said no.
+  DECLINED: 'DECLINED',
+  // Requester withdrew before it resolved.
+  CANCELLED: 'CANCELLED',
+  // Coordinator declined after the target had accepted.
   REJECTED: 'REJECTED',
-  WITHDRAWN: 'WITHDRAWN',
 } as const;
-export type AppealStatus = (typeof AppealStatus)[keyof typeof AppealStatus];
-
-export const VoteValue = {
-  SUPPORT: 'SUPPORT',
-  OPPOSE: 'OPPOSE',
-} as const;
-export type VoteValue = (typeof VoteValue)[keyof typeof VoteValue];
+export type SwapStatus = (typeof SwapStatus)[keyof typeof SwapStatus];

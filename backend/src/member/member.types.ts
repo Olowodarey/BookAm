@@ -41,7 +41,8 @@ export interface MyCircleCard {
   hasCollected: boolean;
   paidCount: number;
   memberCount: number;
-  openAppeals: number;
+  /** Swap requests awaiting this member's response (incoming + pending). */
+  pendingSwaps: number;
 }
 
 /** One installment paid toward a contribution/payout, visible to everyone. */

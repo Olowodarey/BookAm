@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { useParams } from "next/navigation";
+import { useMemberCircle } from "../layout";
 import { memberApi, formatDate } from "@/lib/member/api";
-import type { AppealInfo, VoteValue } from "@/lib/member/types";
+import type { SwapRequestInfo, SwapStatus } from "@/lib/member/types";
 import {
   Badge,
   Button,
@@ -18,54 +19,56 @@ import {
   type BadgeTone,
 } from "@/components/admin/ui";
 
-const APPEAL_TONE: Record<AppealInfo["status"], BadgeTone> = {
-  OPEN: "gold",
-  APPROVED: "green",
+const STATUS_TONE: Record<SwapStatus, BadgeTone> = {
+  PENDING: "gold",
+  ACCEPTED: "gold",
+  CONFIRMED: "green",
+  DECLINED: "red",
+  CANCELLED: "muted",
   REJECTED: "red",
-  WITHDRAWN: "muted",
 };
 
-const APPEAL_LABEL: Record<AppealInfo["status"], string> = {
-  OPEN: "Voting open",
-  APPROVED: "Approved",
-  REJECTED: "Not this time",
-  WITHDRAWN: "Withdrawn",
+const STATUS_LABEL: Record<SwapStatus, string> = {
+  PENDING: "Awaiting reply",
+  ACCEPTED: "Awaiting coordinator",
+  CONFIRMED: "Swapped ✓",
+  DECLINED: "Declined",
+  CANCELLED: "Cancelled",
+  REJECTED: "Not approved",
 };
 
 /**
- * Community appeals: anyone can ask to collect next, everyone sees the
- * reason and the live tally, every member (except the appellant) gets one
- * changeable advisory vote — and the coordinator's final decision is shown
- * to all.
+ * Position swaps: ask a specific member to trade rotation turns. They accept,
+ * then the coordinator confirms — and the two positions swap. Everything stays
+ * visible to the whole circle as a record.
  */
-export default function AppealsPage() {
+export default function SwapsPage() {
   const { id: circleId } = useParams<{ id: string }>();
-  const [appeals, setAppeals] = useState<AppealInfo[] | null>(null);
+  const { detail } = useMemberCircle();
+  const [swaps, setSwaps] = useState<SwapRequestInfo[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const load = useCallback(() => {
-    memberApi.listAppeals(circleId).then(
+    memberApi.listSwaps(circleId).then(
       (list) => {
-        setAppeals(list);
+        setSwaps(list);
         setError(null);
       },
       (e: unknown) =>
-        setError(e instanceof Error ? e.message : "Could not load appeals"),
+        setError(e instanceof Error ? e.message : "Could not load swaps"),
     );
   }, [circleId]);
 
   useEffect(load, [load]);
 
-  const act = async (appealId: string, action: () => Promise<AppealInfo>) => {
-    setBusyId(appealId);
+  const act = async (id: string, action: () => Promise<SwapRequestInfo>) => {
+    setBusyId(id);
     setError(null);
     try {
-      const updated = await action();
-      setAppeals(
-        (prev) => prev?.map((a) => (a.id === updated.id ? updated : a)) ?? null,
-      );
+      await action();
+      load();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Action failed");
     } finally {
@@ -73,18 +76,29 @@ export default function AppealsPage() {
     }
   };
 
-  const myOpenAppeal = appeals?.find((a) => a.isMine && a.status === "OPEN");
+  // Members I could swap with: active roster, not me, not already collected.
+  const eligible = useMemo(
+    () => detail.members.filter((m) => !m.isMe && !m.hasCollected),
+    [detail.members],
+  );
+
+  const iHaveActive = swaps?.some(
+    (s) => s.isMine && (s.status === "PENDING" || s.status === "ACCEPTED"),
+  );
+  const canRequest =
+    !detail.me.hasCollected && eligible.length > 0 && !iHaveActive;
+
+  const incoming = swaps?.filter((s) => s.canRespond) ?? [];
+  const rest = swaps?.filter((s) => !s.canRespond) ?? [];
 
   return (
     <div>
       <PageHeader
-        title="Appeals"
-        subtitle="Need the pot early? Ask the circle — everyone sees the reason, the votes, and the coordinator's final call."
+        title="Swaps"
+        subtitle="Want a different turn? Ask a member to swap positions. They accept, the coordinator confirms — and you trade places."
         action={
-          !myOpenAppeal ? (
-            <Button onClick={() => setCreating(true)}>
-              Request to be considered next
-            </Button>
+          canRequest ? (
+            <Button onClick={() => setCreating(true)}>Request a swap</Button>
           ) : undefined
         }
       />
@@ -95,39 +109,66 @@ export default function AppealsPage() {
         </div>
       ) : null}
 
-      {!appeals ? (
-        <Spinner label="Loading appeals…" />
-      ) : appeals.length === 0 ? (
+      {!swaps ? (
+        <Spinner label="Loading swaps…" />
+      ) : swaps.length === 0 ? (
         <Card>
           <EmptyState
-            title="No appeals yet"
-            hint="If you ever need your turn early — school fees, emergency — this is where you ask, openly."
+            title="No swaps yet"
+            hint={
+              canRequest
+                ? "Tap 'Request a swap' to ask a member to trade turns with you."
+                : "Swap requests will show here once someone starts one."
+            }
           />
         </Card>
       ) : (
-        <ul className="space-y-4">
-          {appeals.map((appeal) => (
-            <li key={appeal.id}>
-              <AppealCard
-                appeal={appeal}
-                busy={busyId === appeal.id}
-                onVote={(value) =>
-                  void act(appeal.id, () => memberApi.vote(appeal.id, value))
-                }
-                onWithdraw={() =>
-                  void act(appeal.id, () => memberApi.withdrawAppeal(appeal.id))
-                }
+        <div className="space-y-4">
+          {incoming.length > 0 ? (
+            <section>
+              <p className="mb-2 font-mono text-[11px] font-bold uppercase tracking-wide text-[#996414]">
+                Waiting for your reply
+              </p>
+              <div className="space-y-3">
+                {incoming.map((s) => (
+                  <SwapCard
+                    key={s.id}
+                    swap={s}
+                    busy={busyId === s.id}
+                    onAccept={() =>
+                      act(s.id, () => memberApi.acceptSwap(s.id))
+                    }
+                    onDecline={() =>
+                      act(s.id, () => memberApi.declineSwap(s.id))
+                    }
+                    onCancel={() => act(s.id, () => memberApi.cancelSwap(s.id))}
+                  />
+                ))}
+              </div>
+            </section>
+          ) : null}
+
+          <div className="space-y-3">
+            {rest.map((s) => (
+              <SwapCard
+                key={s.id}
+                swap={s}
+                busy={busyId === s.id}
+                onAccept={() => act(s.id, () => memberApi.acceptSwap(s.id))}
+                onDecline={() => act(s.id, () => memberApi.declineSwap(s.id))}
+                onCancel={() => act(s.id, () => memberApi.cancelSwap(s.id))}
               />
-            </li>
-          ))}
-        </ul>
+            ))}
+          </div>
+        </div>
       )}
 
       {creating ? (
-        <CreateAppealModal
+        <RequestSwapModal
           circleId={circleId}
+          eligible={eligible}
           onClose={() => setCreating(false)}
-          onDone={() => {
+          onCreated={() => {
             setCreating(false);
             load();
           }}
@@ -137,188 +178,141 @@ export default function AppealsPage() {
   );
 }
 
-function TallyBar({ appeal }: { appeal: AppealInfo }) {
-  const total = appeal.supportCount + appeal.opposeCount;
-  const pct = total === 0 ? 0 : (appeal.supportCount / total) * 100;
-  return (
-    <div>
-      <div className="flex items-center justify-between font-mono text-xs font-bold">
-        <span className="text-green">{appeal.supportCount} support</span>
-        <span className="text-red-600">{appeal.opposeCount} oppose</span>
-      </div>
-      <div
-        role="img"
-        aria-label={`Tally: ${appeal.supportCount} support, ${appeal.opposeCount} oppose`}
-        className="mt-1 h-2 overflow-hidden rounded-full bg-red-100"
-      >
-        <div
-          className="h-full rounded-full bg-green"
-          style={{ width: `${pct}%` }}
-        />
-      </div>
-    </div>
-  );
-}
-
-function AppealCard({
-  appeal,
+function SwapCard({
+  swap,
   busy,
-  onVote,
-  onWithdraw,
+  onAccept,
+  onDecline,
+  onCancel,
 }: {
-  appeal: AppealInfo;
+  swap: SwapRequestInfo;
   busy: boolean;
-  onVote: (value: VoteValue) => void;
-  onWithdraw: () => void;
+  onAccept: () => void;
+  onDecline: () => void;
+  onCancel: () => void;
 }) {
-  const voteButton = (value: VoteValue, label: string) => {
-    const active = appeal.myVote === value;
-    return (
-      <button
-        onClick={() => onVote(value)}
-        disabled={busy || active}
-        aria-pressed={active}
-        aria-label={`${label} ${appeal.appellantName}'s appeal`}
-        className={`rounded-xl px-4 py-2.5 text-sm font-bold transition-colors disabled:cursor-not-allowed ${
-          value === "SUPPORT"
-            ? active
-              ? "bg-green text-paper"
-              : "border-2 border-green text-green hover:bg-green/10"
-            : active
-              ? "bg-red-600 text-white"
-              : "border-2 border-red-300 text-red-600 hover:bg-red-50"
-        }`}
-      >
-        {label}
-        {active ? " ✓" : ""}
-      </button>
-    );
-  };
-
   return (
-    <Card className="p-5">
+    <Card className="border-2 border-ink bg-white px-5 py-4 shadow-[4px_4px_0_0_rgba(15,90,64,0.10)]">
       <div className="flex flex-wrap items-start justify-between gap-2">
-        <div>
-          <p className="font-display text-lg font-bold">
-            {appeal.isMine ? "Your appeal" : appeal.appellantName}
-            <span className="ml-2 font-mono text-xs font-normal text-muted">
-              position {appeal.appellantPosition} · {formatDate(appeal.createdAt)}
+        <div className="min-w-0">
+          <p className="font-display text-base font-bold leading-tight">
+            {swap.isMine ? "You" : swap.requesterName}
+            <span className="mx-1.5 font-mono text-xs font-normal text-muted">
+              pos {swap.requesterPosition}
+            </span>
+            <span className="text-muted">↔</span>{" "}
+            {swap.isForMe ? "you" : swap.targetName}
+            <span className="ml-1.5 font-mono text-xs font-normal text-muted">
+              pos {swap.targetPosition}
             </span>
           </p>
+          {swap.note ? (
+            <p className="mt-1 text-sm text-ink/80">“{swap.note}”</p>
+          ) : null}
+          <p className="mt-1 text-xs text-muted">
+            Asked {formatDate(swap.createdAt)}
+            {swap.decidedByName ? ` · decided by ${swap.decidedByName}` : ""}
+          </p>
         </div>
-        <Badge tone={APPEAL_TONE[appeal.status]}>
-          {APPEAL_LABEL[appeal.status]}
+        <Badge tone={STATUS_TONE[swap.status]}>
+          {STATUS_LABEL[swap.status]}
         </Badge>
       </div>
 
-      <blockquote className="mt-2 rounded-xl bg-paper px-4 py-3 text-sm text-ink/90">
-        “{appeal.reason}”
-      </blockquote>
-
-      <div className="mt-4">
-        <TallyBar appeal={appeal} />
-      </div>
-
-      {appeal.status === "OPEN" ? (
-        <div className="mt-4 flex flex-wrap items-center gap-2">
-          {appeal.canVote ? (
+      {swap.canRespond || swap.canCancel ? (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {swap.canRespond ? (
             <>
-              {voteButton("SUPPORT", "Support")}
-              {voteButton("OPPOSE", "Oppose")}
-              {appeal.myVote ? (
-                <span className="text-xs text-muted">
-                  You voted — tap the other button to change your mind.
-                </span>
-              ) : (
-                <span className="text-xs text-muted">
-                  Your vote helps the coordinator decide.
-                </span>
-              )}
-            </>
-          ) : appeal.isMine ? (
-            <>
-              <Button variant="secondary" onClick={onWithdraw} disabled={busy}>
-                {busy ? "Withdrawing…" : "Withdraw my appeal"}
+              <Button onClick={onAccept} disabled={busy}>
+                Accept swap
               </Button>
-              <span className="text-xs text-muted">
-                The circle is voting; your coordinator makes the final call.
-              </span>
+              <Button variant="ghost" onClick={onDecline} disabled={busy}>
+                Decline
+              </Button>
             </>
           ) : null}
+          {swap.canCancel ? (
+            <Button variant="ghost" onClick={onCancel} disabled={busy}>
+              Cancel request
+            </Button>
+          ) : null}
         </div>
-      ) : (
-        <p className="mt-3 text-sm text-ink/70">
-          {appeal.status === "WITHDRAWN" ? (
-            <>Withdrawn by {appeal.isMine ? "you" : appeal.appellantName}.</>
-          ) : (
-            <>
-              Decided by{" "}
-              <span className="font-semibold">
-                {appeal.decidedByName ?? "the coordinator"}
-              </span>{" "}
-              on {formatDate(appeal.decidedAt)}
-              {appeal.outcomeNote ? <> — “{appeal.outcomeNote}”</> : null}
-            </>
-          )}
+      ) : swap.status === "ACCEPTED" ? (
+        <p className="mt-2 text-xs text-muted">
+          Accepted — waiting for the coordinator to confirm the swap.
         </p>
-      )}
+      ) : null}
     </Card>
   );
 }
 
-function CreateAppealModal({
+function RequestSwapModal({
   circleId,
+  eligible,
   onClose,
-  onDone,
+  onCreated,
 }: {
   circleId: string;
+  eligible: { membershipId: string; name: string; position: number }[];
   onClose: () => void;
-  onDone: () => void;
+  onCreated: () => void;
 }) {
-  const [reason, setReason] = useState("");
+  const [targetId, setTargetId] = useState("");
+  const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
+    if (!targetId) {
+      setError("Pick who you'd like to swap with");
+      return;
+    }
     setError(null);
     setSubmitting(true);
     try {
-      await memberApi.createAppeal(circleId, reason);
-      onDone();
+      await memberApi.createSwap(circleId, targetId, note.trim() || undefined);
+      onCreated();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not create appeal");
+      setError(err instanceof Error ? err.message : "Could not send request");
       setSubmitting(false);
     }
   };
 
   return (
-    <Modal title="Request to be considered next" onClose={onClose}>
-      <form onSubmit={(e) => void submit(e)} className="space-y-4">
-        <p className="text-sm text-ink/80">
-          Tell the circle why you&apos;d like to collect early. Everyone will
-          see your reason and can support or oppose; your coordinator makes the
-          final decision.
-        </p>
+    <Modal title="Request a position swap" onClose={onClose}>
+      <form onSubmit={(e) => void submit(e)} className="grid gap-3">
         {error ? <ErrorNote message={error} /> : null}
-        <Field label="Your reason (10–300 characters)">
+        <Field label="Swap with">
+          <select
+            value={targetId}
+            onChange={(e) => setTargetId(e.target.value)}
+            className={inputClass}
+          >
+            <option value="">Choose a member…</option>
+            {eligible.map((m) => (
+              <option key={m.membershipId} value={m.membershipId}>
+                {m.name} (position {m.position})
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Note (optional)">
           <textarea
-            required
-            minLength={10}
             maxLength={300}
-            rows={4}
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            placeholder="e.g. School fees are due before month end and my turn is far away…"
+            rows={3}
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="e.g. I have an emergency and need to collect sooner — can we trade?"
             className={inputClass}
           />
         </Field>
         <div className="flex justify-end gap-2">
-          <Button variant="ghost" type="button" onClick={onClose} disabled={submitting}>
+          <Button type="button" variant="ghost" onClick={onClose}>
             Cancel
           </Button>
           <Button type="submit" disabled={submitting}>
-            {submitting ? "Sending…" : "Send my appeal"}
+            {submitting ? "Sending…" : "Send request"}
           </Button>
         </div>
       </form>

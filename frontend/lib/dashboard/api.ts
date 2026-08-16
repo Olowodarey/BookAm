@@ -14,8 +14,8 @@ import type {
   ReminderInfo,
   SafeUser,
 } from "./types";
-// Type-only import; appeals are shared domain between member + coordinator.
-import type { AppealInfo } from "../member/types";
+// Type-only import; swaps are shared domain between member + coordinator.
+import type { SwapRequestInfo } from "../member/types";
 import type { SupportContact } from "../support";
 
 export {
@@ -258,18 +258,18 @@ export const coordinatorApi = {
   reminders: (circleId: string) =>
     request<ReminderInfo>(`/circles/${circleId}/reminders`),
 
-  // Appeals (members vote; the coordinator decides)
-  listAppeals: (circleId: string) =>
-    request<AppealInfo[]>(`/circles/${circleId}/appeals`),
-  approveAppeal: (circleId: string, appealId: string, outcomeNote?: string) =>
-    request<AppealInfo>(`/circles/${circleId}/appeals/${appealId}/approve`, {
+  // Position swaps — members arrange; the coordinator confirms the final one.
+  listSwaps: (circleId: string) =>
+    request<SwapRequestInfo[]>(`/circles/${circleId}/swaps`),
+  confirmSwap: (circleId: string, swapId: string, note?: string) =>
+    request<SwapRequestInfo>(`/circles/${circleId}/swaps/${swapId}/confirm`, {
       method: "POST",
-      body: outcomeNote ? { outcomeNote } : {},
+      body: note ? { note } : {},
     }),
-  rejectAppeal: (circleId: string, appealId: string, outcomeNote?: string) =>
-    request<AppealInfo>(`/circles/${circleId}/appeals/${appealId}/reject`, {
+  rejectSwap: (circleId: string, swapId: string, note?: string) =>
+    request<SwapRequestInfo>(`/circles/${circleId}/swaps/${swapId}/reject`, {
       method: "POST",
-      body: outcomeNote ? { outcomeNote } : {},
+      body: note ? { note } : {},
     }),
 
   // Public invite preview (no token needed). Requesting to join is a member

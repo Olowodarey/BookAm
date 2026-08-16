@@ -1,5 +1,4 @@
 import type {
-  AppealInfo,
   CircleInvite,
   InvitePreview,
   LoginResponse,
@@ -11,7 +10,7 @@ import type {
   OtpSentResponse,
   ProfileInput,
   SafeUser,
-  VoteValue,
+  SwapRequestInfo,
 } from "./types";
 import type { SupportContact } from "../support";
 
@@ -196,22 +195,25 @@ export const memberApi = {
       body: { note },
     }),
 
-  // Appeals + advisory voting
-  listAppeals: (circleId: string) =>
-    request<AppealInfo[]>(`/member/circles/${circleId}/appeals`),
-  createAppeal: (circleId: string, reason: string) =>
-    request<AppealInfo>(`/member/circles/${circleId}/appeals`, {
+  // Position swaps (request → target accepts → coordinator confirms)
+  listSwaps: (circleId: string) =>
+    request<SwapRequestInfo[]>(`/member/circles/${circleId}/swaps`),
+  createSwap: (circleId: string, targetMembershipId: string, note?: string) =>
+    request<SwapRequestInfo>(`/member/circles/${circleId}/swaps`, {
       method: "POST",
-      body: { reason },
+      body: note ? { targetMembershipId, note } : { targetMembershipId },
     }),
-  withdrawAppeal: (appealId: string) =>
-    request<AppealInfo>(`/member/appeals/${appealId}/withdraw`, {
+  acceptSwap: (swapId: string) =>
+    request<SwapRequestInfo>(`/member/swaps/${swapId}/accept`, {
       method: "POST",
     }),
-  vote: (appealId: string, value: VoteValue) =>
-    request<AppealInfo>(`/member/appeals/${appealId}/vote`, {
-      method: "PUT",
-      body: { value },
+  declineSwap: (swapId: string) =>
+    request<SwapRequestInfo>(`/member/swaps/${swapId}/decline`, {
+      method: "POST",
+    }),
+  cancelSwap: (swapId: string) =>
+    request<SwapRequestInfo>(`/member/swaps/${swapId}/cancel`, {
+      method: "POST",
     }),
 
   // Platform support contact (admin-set), shown in the shell footer.

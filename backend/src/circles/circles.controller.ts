@@ -18,13 +18,13 @@ import { CirclesService } from './circles.service';
 import { MembersService } from './members.service';
 import { ContributionsService } from './contributions.service';
 import { PayoutsService } from './payouts.service';
-import { AppealsService } from './appeals.service';
+import { SwapsService } from './swaps.service';
 import { MAX_RECEIPT_BYTES, type ReceiptFile } from './receipt-storage.service';
 import { parseAmountField } from './receipt-amount';
 import { CreateCircleDto, UpdateCircleDto } from './dto/circle.dto';
 import { InviteMemberDto, ReorderMembersDto } from './dto/member.dto';
 import { RejectContributionDto } from './dto/contribution.dto';
-import { DecideAppealDto } from './dto/appeal.dto';
+import { DecideSwapDto } from './dto/swap.dto';
 
 const receiptUpload = () =>
   FileInterceptor('file', { limits: { fileSize: MAX_RECEIPT_BYTES } });
@@ -43,7 +43,7 @@ export class CirclesController {
     private readonly members: MembersService,
     private readonly contributions: ContributionsService,
     private readonly payouts: PayoutsService,
-    private readonly appeals: AppealsService,
+    private readonly swaps: SwapsService,
   ) {}
 
   // ---- Circles ------------------------------------------------------------
@@ -216,31 +216,31 @@ export class CirclesController {
     return this.contributions.reminders(id, user.id);
   }
 
-  // ---- Appeals (coordinator decides; member voting is advisory) -----------
+  // ---- Position swaps (coordinator confirms an accepted swap) -------------
 
-  @Get(':id/appeals')
-  async listAppeals(@CurrentUser() user: SafeUser, @Param('id') id: string) {
+  @Get(':id/swaps')
+  async listSwaps(@CurrentUser() user: SafeUser, @Param('id') id: string) {
     await this.circles.assertOwned(id, user.id);
-    return this.appeals.list(id, null);
+    return this.swaps.list(id, null);
   }
 
-  @Post(':id/appeals/:appealId/approve')
-  approveAppeal(
+  @Post(':id/swaps/:swapId/confirm')
+  confirmSwap(
     @CurrentUser() user: SafeUser,
     @Param('id') id: string,
-    @Param('appealId') appealId: string,
-    @Body() dto: DecideAppealDto,
+    @Param('swapId') swapId: string,
+    @Body() dto: DecideSwapDto,
   ) {
-    return this.appeals.decide(id, user.id, appealId, true, dto.outcomeNote);
+    return this.swaps.decide(id, user.id, swapId, true, dto.note);
   }
 
-  @Post(':id/appeals/:appealId/reject')
-  rejectAppeal(
+  @Post(':id/swaps/:swapId/reject')
+  rejectSwap(
     @CurrentUser() user: SafeUser,
     @Param('id') id: string,
-    @Param('appealId') appealId: string,
-    @Body() dto: DecideAppealDto,
+    @Param('swapId') swapId: string,
+    @Body() dto: DecideSwapDto,
   ) {
-    return this.appeals.decide(id, user.id, appealId, false, dto.outcomeNote);
+    return this.swaps.decide(id, user.id, swapId, false, dto.note);
   }
 }

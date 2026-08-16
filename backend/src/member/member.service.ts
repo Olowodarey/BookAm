@@ -7,7 +7,6 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import {
-  Appeal,
   Circle,
   CollectorApplication,
   Contribution,
@@ -15,6 +14,7 @@ import {
   Cycle,
   Membership,
   Payout,
+  SwapRequest,
   User,
 } from '../entities';
 import {
@@ -69,7 +69,8 @@ export class MemberService {
     @InjectRepository(ContributionReceipt)
     private readonly contributionReceipts: Repository<ContributionReceipt>,
     @InjectRepository(Payout) private readonly payouts: Repository<Payout>,
-    @InjectRepository(Appeal) private readonly appeals: Repository<Appeal>,
+    @InjectRepository(SwapRequest)
+    private readonly swaps: Repository<SwapRequest>,
     @InjectRepository(CollectorApplication)
     private readonly applications: Repository<CollectorApplication>,
     @InjectRepository(User) private readonly users: Repository<User>,
@@ -110,8 +111,9 @@ export class MemberService {
         const collected =
           state?.collectedIds ??
           (await this.circles.collectedMembershipIds(circle.id));
-        const openAppeals = await this.appeals.count({
-          where: { circleId: circle.id, status: 'OPEN' },
+        // Swap requests awaiting THIS member's response (incoming + pending).
+        const pendingSwaps = await this.swaps.count({
+          where: { targetId: membership.id, status: 'PENDING' },
         });
 
         return {
@@ -140,7 +142,7 @@ export class MemberService {
             : await this.memberships.count({
                 where: { circleId: circle.id, status: 'ACTIVE' },
               }),
-          openAppeals,
+          pendingSwaps,
         };
       }),
     );

@@ -13,7 +13,7 @@ import {
   watInputToISO,
 } from "@/lib/dashboard/api";
 import type { ReminderInfo } from "@/lib/dashboard/types";
-import type { AppealInfo } from "@/lib/member/types";
+import type { SwapRequestInfo } from "@/lib/member/types";
 import {
   Badge,
   Button,
@@ -157,7 +157,7 @@ export default function CircleOverviewPage() {
         </>
       )}
 
-      <AppealsPanel />
+      <SwapsPanel />
 
       {reminders ? (
         <RemindersModal
@@ -347,47 +347,58 @@ function CircleSettingsCard() {
   );
 }
 
-const APPEAL_TONE: Record<AppealInfo["status"], BadgeTone> = {
-  OPEN: "gold",
-  APPROVED: "green",
+const SWAP_TONE: Record<SwapRequestInfo["status"], BadgeTone> = {
+  PENDING: "gold",
+  ACCEPTED: "gold",
+  CONFIRMED: "green",
+  DECLINED: "red",
+  CANCELLED: "muted",
   REJECTED: "red",
-  WITHDRAWN: "muted",
+};
+
+const SWAP_LABEL: Record<SwapRequestInfo["status"], string> = {
+  PENDING: "Awaiting member",
+  ACCEPTED: "Ready to confirm",
+  CONFIRMED: "Swapped",
+  DECLINED: "Declined",
+  CANCELLED: "Cancelled",
+  REJECTED: "Not approved",
 };
 
 /**
- * Member appeals ("consider me to collect next") with the advisory tally.
- * The coordinator decides here; approving moves the appellant to collect
- * right after the current turn.
+ * Members arrange position swaps between themselves; the coordinator confirms
+ * the one both agreed to — which actually swaps their rotation positions.
+ * Read-only otherwise, kept as a shared record.
  */
-function AppealsPanel() {
+function SwapsPanel() {
   const { detail, refresh } = useCircle();
   const circleId = detail.circle.id;
-  const [appeals, setAppeals] = useState<AppealInfo[] | null>(null);
+  const [swaps, setSwaps] = useState<SwapRequestInfo[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [deciding, setDeciding] = useState<{
-    appeal: AppealInfo;
-    approve: boolean;
+    swap: SwapRequestInfo;
+    confirm: boolean;
   } | null>(null);
 
   const load = useCallback(() => {
-    coordinatorApi.listAppeals(circleId).then(
+    coordinatorApi.listSwaps(circleId).then(
       (list) => {
-        setAppeals(list);
+        setSwaps(list);
         setError(null);
       },
       (e: unknown) =>
-        setError(e instanceof Error ? e.message : "Could not load appeals"),
+        setError(e instanceof Error ? e.message : "Could not load swaps"),
     );
   }, [circleId]);
 
   useEffect(load, [load]);
 
-  if (!appeals || appeals.length === 0) return null;
+  if (!swaps || swaps.length === 0) return null;
 
   return (
-    <section aria-label="Appeals" className="mt-6">
+    <section aria-label="Position swaps" className="mt-6">
       <h2 className="mb-3 font-display text-lg font-bold">
-        Appeals — the circle has spoken, you decide
+        Position swaps — confirm the ones members agreed to
       </h2>
       {error ? (
         <div className="mb-3">
@@ -395,54 +406,49 @@ function AppealsPanel() {
         </div>
       ) : null}
       <ul className="space-y-3">
-        {appeals.map((appeal) => (
-          <li key={appeal.id}>
+        {swaps.map((swap) => (
+          <li key={swap.id}>
             <Card className="p-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="font-semibold">
-                  {appeal.appellantName}
-                  <span className="ml-2 font-mono text-xs font-normal text-muted">
-                    position {appeal.appellantPosition} ·{" "}
-                    {formatDate(appeal.createdAt)}
+                  {swap.requesterName}
+                  <span className="mx-1 font-mono text-xs font-normal text-muted">
+                    pos {swap.requesterPosition}
+                  </span>
+                  <span className="text-muted">↔</span> {swap.targetName}
+                  <span className="ml-1 font-mono text-xs font-normal text-muted">
+                    pos {swap.targetPosition}
                   </span>
                 </p>
-                <div className="flex items-center gap-2">
-                  <span className="font-mono text-xs font-bold">
-                    <span className="text-green">
-                      {appeal.supportCount} support
-                    </span>{" "}
-                    ·{" "}
-                    <span className="text-red-600">
-                      {appeal.opposeCount} oppose
-                    </span>
-                  </span>
-                  <Badge tone={APPEAL_TONE[appeal.status]}>
-                    {appeal.status}
-                  </Badge>
-                </div>
+                <Badge tone={SWAP_TONE[swap.status]}>
+                  {SWAP_LABEL[swap.status]}
+                </Badge>
               </div>
-              <p className="mt-1.5 text-sm text-ink/80">“{appeal.reason}”</p>
-              {appeal.status === "OPEN" ? (
+              {swap.note ? (
+                <p className="mt-1.5 text-sm text-ink/80">“{swap.note}”</p>
+              ) : null}
+              {swap.canDecide ? (
                 <div className="mt-3 flex gap-2">
                   <Button
-                    onClick={() => setDeciding({ appeal, approve: true })}
-                    aria-label={`Approve ${appeal.appellantName}'s appeal to collect next`}
+                    onClick={() => setDeciding({ swap, confirm: true })}
+                    aria-label={`Confirm the swap between ${swap.requesterName} and ${swap.targetName}`}
                   >
-                    Approve — collects next
+                    Confirm swap
                   </Button>
                   <Button
                     variant="danger"
-                    onClick={() => setDeciding({ appeal, approve: false })}
-                    aria-label={`Reject ${appeal.appellantName}'s appeal`}
+                    onClick={() => setDeciding({ swap, confirm: false })}
                   >
                     Reject
                   </Button>
                 </div>
-              ) : appeal.decidedByName ? (
+              ) : swap.status === "PENDING" ? (
                 <p className="mt-2 text-xs text-muted">
-                  Decided by {appeal.decidedByName} on{" "}
-                  {formatDate(appeal.decidedAt)}
-                  {appeal.outcomeNote ? <> — “{appeal.outcomeNote}”</> : null}
+                  Waiting for {swap.targetName} to accept before you can confirm.
+                </p>
+              ) : swap.decidedByName ? (
+                <p className="mt-2 text-xs text-muted">
+                  Decided by {swap.decidedByName} on {formatDate(swap.decidedAt)}
                 </p>
               ) : null}
             </Card>
@@ -451,15 +457,15 @@ function AppealsPanel() {
       </ul>
 
       {deciding ? (
-        <DecideAppealModal
+        <DecideSwapModal
           circleId={circleId}
-          appeal={deciding.appeal}
-          approve={deciding.approve}
+          swap={deciding.swap}
+          confirm={deciding.confirm}
           onClose={() => setDeciding(null)}
           onDone={() => {
             setDeciding(null);
             load();
-            // Approval reorders the rotation — refresh the circle view too.
+            // Confirming reorders the rotation — refresh the circle view too.
             void refresh();
           }}
         />
@@ -468,16 +474,16 @@ function AppealsPanel() {
   );
 }
 
-function DecideAppealModal({
+function DecideSwapModal({
   circleId,
-  appeal,
-  approve,
+  swap,
+  confirm,
   onClose,
   onDone,
 }: {
   circleId: string;
-  appeal: AppealInfo;
-  approve: boolean;
+  swap: SwapRequestInfo;
+  confirm: boolean;
   onClose: () => void;
   onDone: () => void;
 }) {
@@ -490,14 +496,14 @@ function DecideAppealModal({
     setError(null);
     setSubmitting(true);
     try {
-      if (approve) {
-        await coordinatorApi.approveAppeal(circleId, appeal.id, note || undefined);
+      if (confirm) {
+        await coordinatorApi.confirmSwap(circleId, swap.id, note || undefined);
       } else {
-        await coordinatorApi.rejectAppeal(circleId, appeal.id, note || undefined);
+        await coordinatorApi.rejectSwap(circleId, swap.id, note || undefined);
       }
       onDone();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not decide appeal");
+      setError(err instanceof Error ? err.message : "Could not decide swap");
       setSubmitting(false);
     }
   };
@@ -505,27 +511,21 @@ function DecideAppealModal({
   return (
     <Modal
       title={
-        approve
-          ? `Approve — ${appeal.appellantName} collects next`
-          : `Reject ${appeal.appellantName}'s appeal`
+        confirm
+          ? `Confirm swap — ${swap.requesterName} ↔ ${swap.targetName}`
+          : `Reject swap — ${swap.requesterName} ↔ ${swap.targetName}`
       }
       onClose={onClose}
     >
       <form onSubmit={(e) => void submit(e)} className="space-y-4">
         <p className="text-sm text-ink/80">
-          {approve ? (
+          {confirm ? (
             <>
-              The rotation will be reordered so{" "}
-              <span className="font-semibold">{appeal.appellantName}</span>{" "}
-              collects right after the current turn. The circle voted{" "}
-              <span className="font-mono font-bold text-green">
-                {appeal.supportCount} support
-              </span>{" "}
-              ·{" "}
-              <span className="font-mono font-bold text-red-600">
-                {appeal.opposeCount} oppose
-              </span>
-              .
+              <span className="font-semibold">{swap.requesterName}</span>{" "}
+              (position {swap.requesterPosition}) and{" "}
+              <span className="font-semibold">{swap.targetName}</span> (position{" "}
+              {swap.targetPosition}) will trade rotation positions. Everyone sees
+              the change.
             </>
           ) : (
             <>
@@ -541,11 +541,6 @@ function DecideAppealModal({
             rows={2}
             value={note}
             onChange={(e) => setNote(e.target.value)}
-            placeholder={
-              approve
-                ? "e.g. Emergency confirmed — she collects next, order continues after."
-                : "e.g. Two members ahead have waited longer — let's keep the order."
-            }
             className={inputClass}
           />
         </Field>
@@ -554,15 +549,15 @@ function DecideAppealModal({
             Cancel
           </Button>
           <Button
-            variant={approve ? "primary" : "danger"}
+            variant={confirm ? "primary" : "danger"}
             type="submit"
             disabled={submitting}
           >
             {submitting
               ? "Working…"
-              : approve
-                ? "Approve appeal"
-                : "Reject appeal"}
+              : confirm
+                ? "Confirm swap"
+                : "Reject swap"}
           </Button>
         </div>
       </form>

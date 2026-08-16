@@ -35,7 +35,7 @@ const CIRCLE_NAV = [
   { label: "Overview", segment: "" },
   { label: "Rounds", segment: "rounds" },
   { label: "Members", segment: "members" },
-  { label: "Appeals", segment: "appeals" },
+  { label: "Swaps", segment: "swaps" },
 ] as const;
 
 function circleIdFromPath(pathname: string): string | null {
@@ -45,7 +45,7 @@ function circleIdFromPath(pathname: string): string | null {
 
 /**
  * The contributor's shell — deliberately simpler than the coordinator one:
- * My circles, then Overview / Members / Appeals inside a circle. Mobile-first
+ * My circles, then Overview / Members / Swaps inside a circle. Mobile-first
  * with a horizontal nav on small screens.
  */
 export default function MemberShell({ children }: { children: ReactNode }) {

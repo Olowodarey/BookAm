@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import {
-  Appeal,
   Circle,
   CollectorApplication,
   Contribution,
@@ -9,6 +8,7 @@ import {
   Cycle,
   Membership,
   Payout,
+  SwapRequest,
   User,
 } from '../entities';
 import { AuthModule } from '../auth/auth.module';
@@ -25,7 +25,7 @@ import { MemberService } from './member.service';
       Contribution,
       ContributionReceipt,
       Payout,
-      Appeal,
+      SwapRequest,
       CollectorApplication,
       User,
     ]),

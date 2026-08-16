@@ -6,7 +6,6 @@ import {
   NotFoundException,
   Param,
   Post,
-  Put,
   UploadedFile,
   UseGuards,
   UseInterceptors,
@@ -14,17 +13,17 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Appeal } from '../entities';
+import { SwapRequest } from '../entities';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/roles';
 import type { SafeUser } from '../auth/auth.types';
-import { AppealsService } from '../circles/appeals.service';
+import { SwapsService } from '../circles/swaps.service';
 import {
   MAX_RECEIPT_BYTES,
   type ReceiptFile,
 } from '../circles/receipt-storage.service';
 import { parseAmountField } from '../circles/receipt-amount';
-import { CreateAppealDto, VoteDto } from '../circles/dto/appeal.dto';
+import { CreateSwapDto } from '../circles/dto/swap.dto';
 import { ApplyCollectorDto } from './dto/collector-application.dto';
 import { MemberService } from './member.service';
 
@@ -32,9 +31,9 @@ import { MemberService } from './member.service';
  * The contributor's window into their circles. No role restriction — anyone
  * signed in (a member, or a coordinator who also saves in someone else's
  * circle) sees exactly the circles their own memberships grant, nothing more.
- * Read-only except two personal actions: uploading their own receipt and
- * appeals (create/withdraw/vote). Verify/reject, membership and rotation
- * changes are rejected here by simply not existing — they live on the
+ * Read-only except a few personal actions: uploading their own receipt and
+ * position swaps (request/accept/decline/cancel). Verify/reject, membership and
+ * rotation changes are rejected here by simply not existing — they live on the
  * coordinator-guarded /circles routes.
  */
 @Controller('member')
@@ -42,9 +41,9 @@ import { MemberService } from './member.service';
 export class MemberController {
   constructor(
     private readonly member: MemberService,
-    private readonly appeals: AppealsService,
-    @InjectRepository(Appeal)
-    private readonly appealRepo: Repository<Appeal>,
+    private readonly swaps: SwapsService,
+    @InjectRepository(SwapRequest)
+    private readonly swapRepo: Repository<SwapRequest>,
   ) {}
 
   @Get('circles')
@@ -124,53 +123,66 @@ export class MemberController {
     return this.member.applyCollector(user.id, dto.note);
   }
 
-  // ---- Appeals -------------------------------------------------------------
+  // ---- Position swaps ------------------------------------------------------
 
-  @Get('circles/:circleId/appeals')
-  async listAppeals(
+  @Get('circles/:circleId/swaps')
+  async listSwaps(
     @CurrentUser() user: SafeUser,
     @Param('circleId') circleId: string,
   ) {
     const membership = await this.member.requireMembership(circleId, user.id);
-    return this.appeals.list(circleId, membership.id);
+    return this.swaps.list(circleId, membership.id);
   }
 
-  @Post('circles/:circleId/appeals')
-  async createAppeal(
+  @Post('circles/:circleId/swaps')
+  async createSwap(
     @CurrentUser() user: SafeUser,
     @Param('circleId') circleId: string,
-    @Body() dto: CreateAppealDto,
+    @Body() dto: CreateSwapDto,
   ) {
     const membership = await this.member.requireMembership(circleId, user.id);
-    return this.appeals.create(circleId, membership, dto.reason);
+    return this.swaps.create(
+      circleId,
+      membership,
+      dto.targetMembershipId,
+      dto.note,
+    );
   }
 
-  @Post('appeals/:appealId/withdraw')
-  async withdrawAppeal(
+  @Post('swaps/:swapId/accept')
+  async acceptSwap(
     @CurrentUser() user: SafeUser,
-    @Param('appealId') appealId: string,
+    @Param('swapId') swapId: string,
   ) {
-    const membership = await this.membershipForAppeal(appealId, user.id);
-    return this.appeals.withdraw(appealId, membership);
+    const membership = await this.membershipForSwap(swapId, user.id);
+    return this.swaps.respond(swapId, membership, true);
   }
 
-  @Put('appeals/:appealId/vote')
-  async vote(
+  @Post('swaps/:swapId/decline')
+  async declineSwap(
     @CurrentUser() user: SafeUser,
-    @Param('appealId') appealId: string,
-    @Body() dto: VoteDto,
+    @Param('swapId') swapId: string,
   ) {
-    const membership = await this.membershipForAppeal(appealId, user.id);
-    return this.appeals.vote(appealId, membership, dto.value);
+    const membership = await this.membershipForSwap(swapId, user.id);
+    return this.swaps.respond(swapId, membership, false);
   }
 
-  /** Resolves the caller's membership in the appeal's circle (404 otherwise). */
-  private async membershipForAppeal(appealId: string, userId: string) {
-    const appeal = await this.appealRepo.findOne({
-      where: { id: appealId },
+  @Post('swaps/:swapId/cancel')
+  async cancelSwap(
+    @CurrentUser() user: SafeUser,
+    @Param('swapId') swapId: string,
+  ) {
+    const membership = await this.membershipForSwap(swapId, user.id);
+    return this.swaps.cancel(swapId, membership);
+  }
+
+  /** Resolves the caller's membership in the swap's circle (404 otherwise). */
+  private async membershipForSwap(swapId: string, userId: string) {
+    const swap = await this.swapRepo.findOne({
+      where: { id: swapId },
       select: { id: true, circleId: true },
     });
-    if (!appeal) throw new NotFoundException('Appeal not found');
-    return this.member.requireMembership(appeal.circleId, userId);
+    if (!swap) throw new NotFoundException('Swap request not found');
+    return this.member.requireMembership(swap.circleId, userId);
   }
 }

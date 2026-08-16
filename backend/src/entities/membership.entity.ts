@@ -15,8 +15,7 @@ import { User } from './user.entity';
 import { Contribution } from './contribution.entity';
 import { Payout } from './payout.entity';
 import { Cycle } from './cycle.entity';
-import { Appeal } from './appeal.entity';
-import { AppealVote } from './appeal-vote.entity';
+import { SwapRequest } from './swap-request.entity';
 
 /** An account's place in a Circle. userId links a real account; a coordinator may invite a Gmail with no account yet (userId null). */
 @Entity('Membership')
@@ -72,9 +71,9 @@ export class Membership extends UuidEntity {
   @OneToMany(() => Cycle, (c) => c.collector)
   collectingCycles!: Cycle[];
 
-  @OneToMany(() => Appeal, (a) => a.appellant)
-  appeals!: Appeal[];
+  @OneToMany(() => SwapRequest, (s) => s.requester)
+  swapsRequested!: SwapRequest[];
 
-  @OneToMany(() => AppealVote, (v) => v.voter)
-  appealVotes!: AppealVote[];
+  @OneToMany(() => SwapRequest, (s) => s.target)
+  swapsReceived!: SwapRequest[];
 }

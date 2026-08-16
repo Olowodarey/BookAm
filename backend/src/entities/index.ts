@@ -11,8 +11,7 @@ import { ContributionReceipt } from './contribution-receipt.entity';
 import { PayoutReceipt } from './payout-receipt.entity';
 import { PhoneOtp } from './phone-otp.entity';
 import { EmailOtp } from './email-otp.entity';
-import { Appeal } from './appeal.entity';
-import { AppealVote } from './appeal-vote.entity';
+import { SwapRequest } from './swap-request.entity';
 import { WaitlistEntry } from './waitlist-entry.entity';
 import { PlatformSettings } from './platform-settings.entity';
 
@@ -31,8 +30,7 @@ export {
   PayoutReceipt,
   PhoneOtp,
   EmailOtp,
-  Appeal,
-  AppealVote,
+  SwapRequest,
   WaitlistEntry,
   PlatformSettings,
 };
@@ -52,8 +50,7 @@ export const entities = [
   PayoutReceipt,
   PhoneOtp,
   EmailOtp,
-  Appeal,
-  AppealVote,
+  SwapRequest,
   WaitlistEntry,
   PlatformSettings,
 ];

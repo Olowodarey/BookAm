@@ -1,12 +1,11 @@
 import type {
-  AppealStatus,
   CircleFrequency,
   CircleStatus,
   ContributionStatus,
   CycleStatus,
   MembershipStatus,
   PayoutStatus,
-  VoteValue,
+  SwapStatus,
 } from '../entities';
 
 /**
@@ -180,27 +179,31 @@ export interface CompletePayoutResult {
 }
 
 /**
- * An appeal ("consider me to collect next") as shown to members and the
- * coordinator alike — reason, live tally and outcome are visible to everyone
- * in the circle. Voting is advisory; the coordinator decides.
+ * A position-swap request as shown to members and the coordinator alike — who
+ * asked, who they want to swap with, the note, and the outcome. Flow: requester
+ * asks → target accepts → coordinator confirms (which swaps their positions).
  */
-export interface AppealInfo {
+export interface SwapRequestInfo {
   id: string;
   circleId: string;
-  appellantName: string;
-  appellantPosition: number;
-  /** True when the viewer is the appellant (enables withdraw, blocks voting). */
+  requesterName: string;
+  requesterPosition: number;
+  targetName: string;
+  targetPosition: number;
+  status: SwapStatus;
+  note: string | null;
+  /** Viewer is the requester (can cancel while unresolved). */
   isMine: boolean;
-  reason: string;
-  status: AppealStatus;
-  supportCount: number;
-  opposeCount: number;
-  /** The viewer's own vote, if any (members only; null for the coordinator). */
-  myVote: VoteValue | null;
-  /** Viewer may vote right now (open appeal, member, not the appellant). */
-  canVote: boolean;
+  /** Viewer is the target (can accept/decline while PENDING). */
+  isForMe: boolean;
+  /** Target may respond right now (PENDING + viewer is the target). */
+  canRespond: boolean;
+  /** Requester may cancel right now (PENDING/ACCEPTED + viewer is the requester). */
+  canCancel: boolean;
+  /** Coordinator may confirm/reject right now (ACCEPTED). Coordinator view only. */
+  canDecide: boolean;
   createdAt: Date;
+  targetRespondedAt: Date | null;
   decidedByName: string | null;
   decidedAt: Date | null;
-  outcomeNote: string | null;
 }

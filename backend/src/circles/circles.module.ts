@@ -1,8 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import {
-  Appeal,
-  AppealVote,
   Circle,
   Contribution,
   ContributionReceipt,
@@ -10,6 +8,7 @@ import {
   Membership,
   Payout,
   PayoutReceipt,
+  SwapRequest,
   User,
 } from '../entities';
 import { AuthModule } from '../auth/auth.module';
@@ -19,7 +18,7 @@ import { CirclesService } from './circles.service';
 import { MembersService } from './members.service';
 import { ContributionsService } from './contributions.service';
 import { PayoutsService } from './payouts.service';
-import { AppealsService } from './appeals.service';
+import { SwapsService } from './swaps.service';
 import { ReceiptStorageService } from './receipt-storage.service';
 
 @Module({
@@ -32,8 +31,7 @@ import { ReceiptStorageService } from './receipt-storage.service';
       ContributionReceipt,
       Payout,
       PayoutReceipt,
-      Appeal,
-      AppealVote,
+      SwapRequest,
       User,
     ]),
     AuthModule,
@@ -44,10 +42,10 @@ import { ReceiptStorageService } from './receipt-storage.service';
     MembersService,
     ContributionsService,
     PayoutsService,
-    AppealsService,
+    SwapsService,
     ReceiptStorageService,
   ],
   // Shared with the member module — same domain, member-scoped access.
-  exports: [CirclesService, AppealsService, ReceiptStorageService],
+  exports: [CirclesService, SwapsService, ReceiptStorageService],
 })
 export class CirclesModule {}

@@ -15,7 +15,7 @@ import { ErrorNote, Spinner } from "@/components/admin/ui";
 
 interface MemberCircleContextValue {
   detail: MemberCircleDetail;
-  /** Re-fetches after my receipt upload / appeal actions. */
+  /** Re-fetches after my receipt upload / swap actions. */
   refresh: () => Promise<void>;
 }
 
