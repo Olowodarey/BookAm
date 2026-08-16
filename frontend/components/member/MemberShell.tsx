@@ -15,6 +15,7 @@ import { ApiError, memberApi, setToken } from "@/lib/member/api";
 import { clearSession } from "@/lib/auth/api";
 import type { MyCircleCard, SafeUser } from "@/lib/member/types";
 import { Spinner } from "@/components/admin/ui";
+import { SupportContactFooter } from "@/components/support/SupportContact";
 
 interface MemberContextValue {
   user: SafeUser;
@@ -210,6 +211,7 @@ export default function MemberShell({ children }: { children: ReactNode }) {
           <main className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-8">
             {children}
           </main>
+          <SupportContactFooter load={memberApi.supportContact} />
         </div>
       </div>
     </MemberContext.Provider>

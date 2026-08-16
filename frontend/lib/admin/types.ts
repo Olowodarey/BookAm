@@ -137,3 +137,16 @@ export interface WaitlistList {
   total: number;
   entries: WaitlistEntry[];
 }
+
+/** Platform-wide support contact the admin sets (shown to coordinators/members). */
+export interface PlatformSettings {
+  id: number;
+  supportWhatsapp: string | null;
+  supportEmail: string | null;
+  updatedAt: string;
+}
+
+export interface SettingsInput {
+  supportWhatsapp?: string;
+  supportEmail?: string;
+}

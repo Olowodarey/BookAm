@@ -8,6 +8,7 @@ import { AdminModule } from './admin/admin.module';
 import { CirclesModule } from './circles/circles.module';
 import { MemberModule } from './member/member.module';
 import { WaitlistModule } from './waitlist/waitlist.module';
+import { SettingsModule } from './settings/settings.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { WaitlistModule } from './waitlist/waitlist.module';
     CirclesModule,
     MemberModule,
     WaitlistModule,
+    SettingsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

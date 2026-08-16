@@ -15,6 +15,7 @@ import { ApiError, coordinatorApi, setToken } from "@/lib/dashboard/api";
 import { clearSession } from "@/lib/auth/api";
 import type { CircleSummary, SafeUser } from "@/lib/dashboard/types";
 import { Spinner } from "@/components/admin/ui";
+import { SupportContactFooter } from "@/components/support/SupportContact";
 
 interface DashboardContextValue {
   user: SafeUser;
@@ -277,6 +278,7 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
           <main className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-8">
             {children}
           </main>
+          <SupportContactFooter load={coordinatorApi.supportContact} />
         </div>
       </div>
     </DashboardContext.Provider>

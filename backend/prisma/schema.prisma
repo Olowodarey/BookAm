@@ -429,3 +429,15 @@ model WaitlistEntry {
 
   @@index([createdAt])
 }
+
+/**
+ * Platform-wide configuration — a single row (id = 1). Right now it only holds
+ * the support contact (WhatsApp + email) the admin sets, shown to coordinators
+ * and members so they know how to reach BookAm for help. Both fields optional.
+ */
+model PlatformSettings {
+  id              Int      @id @default(1)
+  supportWhatsapp String?
+  supportEmail    String?
+  updatedAt       DateTime @updatedAt
+}

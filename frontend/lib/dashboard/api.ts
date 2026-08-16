@@ -16,6 +16,7 @@ import type {
 } from "./types";
 // Type-only import; appeals are shared domain between member + coordinator.
 import type { AppealInfo } from "../member/types";
+import type { SupportContact } from "../support";
 
 export {
   formatDate,
@@ -274,6 +275,9 @@ export const coordinatorApi = {
   // Public invite preview (no token needed). Requesting to join is a member
   // action (requires login) — see memberApi.requestJoinCircle.
   invitePreview: (token: string) => request<InvitePreview>(`/invite/${token}`),
+
+  // Platform support contact (admin-set), shown in the shell footer.
+  supportContact: () => request<SupportContact>("/support-contact"),
 };
 
 export const FREQUENCY_LABEL: Record<string, string> = {

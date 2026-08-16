@@ -13,6 +13,7 @@ import type {
   SafeUser,
   VoteValue,
 } from "./types";
+import type { SupportContact } from "../support";
 
 export {
   formatDate,
@@ -212,4 +213,7 @@ export const memberApi = {
       method: "PUT",
       body: { value },
     }),
+
+  // Platform support contact (admin-set), shown in the shell footer.
+  supportContact: () => request<SupportContact>("/support-contact"),
 };

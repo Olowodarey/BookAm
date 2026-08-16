@@ -5,8 +5,10 @@ import type {
   OverviewMetrics,
   Paginated,
   PlanInput,
+  PlatformSettings,
   Role,
   SafeUser,
+  SettingsInput,
   Subscription,
   SubscriptionPlan,
   SubscriptionStatus,
@@ -171,6 +173,11 @@ export const adminApi = {
 
   // Early-access waitlist (landing-page email signups)
   waitlist: () => request<WaitlistList>("/admin/waitlist"),
+
+  // Platform settings (support contact)
+  getSettings: () => request<PlatformSettings>("/admin/settings"),
+  updateSettings: (input: SettingsInput) =>
+    request<PlatformSettings>("/admin/settings", { method: "PUT", body: input }),
 };
 
 export const formatNaira = (amount: number) =>

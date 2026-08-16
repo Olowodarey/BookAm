@@ -6,6 +6,7 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Query,
   UseGuards,
 } from '@nestjs/common';
@@ -25,6 +26,8 @@ import {
   ListSubscriptionsDto,
   ListUsersDto,
 } from './dto/query.dto';
+import { SettingsService } from '../settings/settings.service';
+import { UpdateSettingsDto } from '../settings/dto/settings.dto';
 
 @Controller('admin')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -36,6 +39,7 @@ export class AdminController {
     private readonly plans: PlansService,
     private readonly subscriptions: SubscriptionsService,
     private readonly users: UsersService,
+    private readonly settings: SettingsService,
   ) {}
 
   // ---- Overview -----------------------------------------------------------
@@ -132,5 +136,17 @@ export class AdminController {
   @Post('users/:id/reactivate')
   reactivateUser(@Param('id') id: string) {
     return this.users.reactivate(id);
+  }
+
+  // ---- Platform settings ----------------------------------------------------
+
+  @Get('settings')
+  getSettings() {
+    return this.settings.get();
+  }
+
+  @Put('settings')
+  updateSettings(@Body() dto: UpdateSettingsDto) {
+    return this.settings.update(dto);
   }
 }

@@ -8,6 +8,7 @@ import { ApplicationsService } from './applications.service';
 import { PlansService } from './plans.service';
 import { SubscriptionsService } from './subscriptions.service';
 import { UsersService } from './users.service';
+import { SettingsService } from '../settings/settings.service';
 import type { ListUsersDto } from './dto/query.dto';
 
 const admin: SafeUser = {
@@ -33,6 +34,7 @@ describe('AdminController', () => {
   let plans: { create: jest.Mock; remove: jest.Mock };
   let subscriptions: { updateStatus: jest.Mock };
   let users: { list: jest.Mock; suspend: jest.Mock };
+  let settings: { get: jest.Mock; update: jest.Mock };
 
   beforeEach(() => {
     overview = { metrics: jest.fn().mockResolvedValue({ totalUsers: 1 }) };
@@ -44,6 +46,7 @@ describe('AdminController', () => {
     plans = { create: jest.fn(), remove: jest.fn() };
     subscriptions = { updateStatus: jest.fn() };
     users = { list: jest.fn(), suspend: jest.fn() };
+    settings = { get: jest.fn(), update: jest.fn() };
 
     controller = new AdminController(
       overview as unknown as OverviewService,
@@ -51,6 +54,7 @@ describe('AdminController', () => {
       plans as unknown as PlansService,
       subscriptions as unknown as SubscriptionsService,
       users as unknown as UsersService,
+      settings as unknown as SettingsService,
     );
   });
 
