@@ -1,39 +1,36 @@
-import { PrismaService } from '../prisma/prisma.service';
+import { Repository } from 'typeorm';
+import { Circle, CollectorApplication, Subscription, User } from '../entities';
 import { OverviewService } from './overview.service';
 
 describe('OverviewService', () => {
   let service: OverviewService;
-  let prisma: {
-    user: { count: jest.Mock };
-    circle: { count: jest.Mock };
-    collectorApplication: { count: jest.Mock };
-    subscription: { count: jest.Mock; findMany: jest.Mock };
-    $transaction: jest.Mock;
-  };
+  let users: { count: jest.Mock };
+  let circles: { count: jest.Mock };
+  let applications: { count: jest.Mock };
+  let subscriptions: { count: jest.Mock; find: jest.Mock };
 
   beforeEach(() => {
-    prisma = {
-      user: { count: jest.fn() },
-      circle: { count: jest.fn() },
-      collectorApplication: { count: jest.fn() },
-      subscription: { count: jest.fn(), findMany: jest.fn() },
-      $transaction: jest.fn(),
-    };
-    service = new OverviewService(prisma as unknown as PrismaService);
+    users = { count: jest.fn() };
+    circles = { count: jest.fn() };
+    applications = { count: jest.fn() };
+    subscriptions = { count: jest.fn(), find: jest.fn() };
+    service = new OverviewService(
+      users as unknown as Repository<User>,
+      circles as unknown as Repository<Circle>,
+      applications as unknown as Repository<CollectorApplication>,
+      subscriptions as unknown as Repository<Subscription>,
+    );
   });
 
   it('aggregates counts and sums revenue over active subscriptions', async () => {
-    prisma.$transaction.mockResolvedValue([
-      120, // totalUsers
-      8, // totalCoordinators
-      15, // totalCircles
-      3, // pendingApplications
-      5, // activeSubscriptions
-      [
-        { plan: { priceNaira: 1000 } },
-        { plan: { priceNaira: 2500 } },
-        { plan: { priceNaira: 500 } },
-      ],
+    users.count.mockResolvedValueOnce(120).mockResolvedValueOnce(8);
+    circles.count.mockResolvedValue(15);
+    applications.count.mockResolvedValue(3);
+    subscriptions.count.mockResolvedValue(5);
+    subscriptions.find.mockResolvedValue([
+      { plan: { priceNaira: 1000 } },
+      { plan: { priceNaira: 2500 } },
+      { plan: { priceNaira: 500 } },
     ]);
 
     const result = await service.metrics();
@@ -49,7 +46,11 @@ describe('OverviewService', () => {
   });
 
   it('reports zero revenue when there are no active subscriptions', async () => {
-    prisma.$transaction.mockResolvedValue([0, 0, 0, 0, 0, []]);
+    users.count.mockResolvedValue(0);
+    circles.count.mockResolvedValue(0);
+    applications.count.mockResolvedValue(0);
+    subscriptions.count.mockResolvedValue(0);
+    subscriptions.find.mockResolvedValue([]);
 
     const result = await service.metrics();
 

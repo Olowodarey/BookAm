@@ -5,7 +5,7 @@ import type {
   ContributionStatus,
   CycleStatus,
   PayoutStatus,
-} from '@prisma/client';
+} from '../entities';
 
 /**
  * Response shapes for the member (contributor) API. The frontend mirrors

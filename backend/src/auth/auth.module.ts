@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { EmailOtp, Membership, PhoneOtp, User } from '../entities';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { OtpService } from './otp.service';
@@ -12,6 +14,7 @@ import { RolesGuard } from './roles';
 
 @Module({
   imports: [
+    TypeOrmModule.forFeature([User, Membership, PhoneOtp, EmailOtp]),
     JwtModule.registerAsync({
       global: true,
       imports: [ConfigModule],
@@ -32,6 +35,8 @@ import { RolesGuard } from './roles';
     JwtAuthGuard,
     RolesGuard,
   ],
-  exports: [AuthService, EmailService, JwtAuthGuard, RolesGuard],
+  // Re-export the TypeORM feature so any module importing AuthModule can also
+  // construct JwtAuthGuard (which needs the User repository) in its own context.
+  exports: [TypeOrmModule, AuthService, EmailService, JwtAuthGuard, RolesGuard],
 })
 export class AuthModule {}

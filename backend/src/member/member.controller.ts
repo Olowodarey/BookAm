@@ -12,10 +12,12 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { Appeal } from '../entities';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/roles';
 import type { SafeUser } from '../auth/auth.types';
-import { PrismaService } from '../prisma/prisma.service';
 import { AppealsService } from '../circles/appeals.service';
 import {
   MAX_RECEIPT_BYTES,
@@ -41,7 +43,8 @@ export class MemberController {
   constructor(
     private readonly member: MemberService,
     private readonly appeals: AppealsService,
-    private readonly prisma: PrismaService,
+    @InjectRepository(Appeal)
+    private readonly appealRepo: Repository<Appeal>,
   ) {}
 
   @Get('circles')
@@ -163,9 +166,9 @@ export class MemberController {
 
   /** Resolves the caller's membership in the appeal's circle (404 otherwise). */
   private async membershipForAppeal(appealId: string, userId: string) {
-    const appeal = await this.prisma.appeal.findUnique({
+    const appeal = await this.appealRepo.findOne({
       where: { id: appealId },
-      select: { circleId: true },
+      select: { id: true, circleId: true },
     });
     if (!appeal) throw new NotFoundException('Appeal not found');
     return this.member.requireMembership(appeal.circleId, userId);

@@ -1,7 +1,9 @@
 import { BadRequestException, HttpException, Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { IsNull, Repository } from 'typeorm';
 import { randomInt } from 'crypto';
 import * as bcrypt from 'bcryptjs';
-import { PrismaService } from '../prisma/prisma.service';
+import { EmailOtp } from '../entities';
 import { EmailService } from './email.service';
 
 const CODE_TTL_MS = 10 * 60 * 1000;
@@ -22,7 +24,8 @@ export interface EmailOtpSendResult {
 @Injectable()
 export class EmailOtpService {
   constructor(
-    private readonly prisma: PrismaService,
+    @InjectRepository(EmailOtp)
+    private readonly emailOtp: Repository<EmailOtp>,
     private readonly email: EmailService,
   ) {}
 
@@ -30,9 +33,9 @@ export class EmailOtpService {
     email: string,
     purpose = 'verification',
   ): Promise<EmailOtpSendResult> {
-    const latest = await this.prisma.emailOtp.findFirst({
+    const latest = await this.emailOtp.findOne({
       where: { email },
-      orderBy: { createdAt: 'desc' },
+      order: { createdAt: 'DESC' },
     });
     if (latest) {
       const since = Date.now() - latest.createdAt.getTime();
@@ -45,13 +48,13 @@ export class EmailOtpService {
     }
 
     const code = String(randomInt(0, 1_000_000)).padStart(6, '0');
-    await this.prisma.emailOtp.create({
-      data: {
+    await this.emailOtp.save(
+      this.emailOtp.create({
         email,
         codeHash: await bcrypt.hash(code, 10),
         expiresAt: new Date(Date.now() + CODE_TTL_MS),
-      },
-    });
+      }),
+    );
 
     await this.email.sendCode(
       email,
@@ -80,9 +83,9 @@ export class EmailOtpService {
 
   /** Consumes the latest valid code for the email or throws a 400. */
   async verify(email: string, code: string): Promise<void> {
-    const otp = await this.prisma.emailOtp.findFirst({
-      where: { email, consumedAt: null },
-      orderBy: { createdAt: 'desc' },
+    const otp = await this.emailOtp.findOne({
+      where: { email, consumedAt: IsNull() },
+      order: { createdAt: 'DESC' },
     });
     if (!otp || otp.expiresAt.getTime() < Date.now()) {
       throw new BadRequestException(
@@ -96,15 +99,9 @@ export class EmailOtpService {
     }
     const ok = await bcrypt.compare(code, otp.codeHash);
     if (!ok) {
-      await this.prisma.emailOtp.update({
-        where: { id: otp.id },
-        data: { attempts: { increment: 1 } },
-      });
+      await this.emailOtp.increment({ id: otp.id }, 'attempts', 1);
       throw new BadRequestException('Incorrect code — check and try again');
     }
-    await this.prisma.emailOtp.update({
-      where: { id: otp.id },
-      data: { consumedAt: new Date() },
-    });
+    await this.emailOtp.update(otp.id, { consumedAt: new Date() });
   }
 }

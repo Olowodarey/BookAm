@@ -1,40 +1,45 @@
-import { PrismaService } from '../prisma/prisma.service';
+import { Repository } from 'typeorm';
+import { PlatformSettings } from '../entities';
 import { SettingsService } from './settings.service';
 
 describe('SettingsService', () => {
   let service: SettingsService;
-  let prisma: {
-    platformSettings: {
-      upsert: jest.Mock;
-      findUnique: jest.Mock;
-    };
+  let settings: {
+    findOne: jest.Mock;
+    save: jest.Mock;
+    create: jest.Mock;
   };
 
   beforeEach(() => {
-    prisma = {
-      platformSettings: {
-        upsert: jest.fn(),
-        findUnique: jest.fn(),
-      },
+    settings = {
+      findOne: jest.fn(),
+      save: jest.fn().mockImplementation((row) => Promise.resolve(row)),
+      create: jest.fn().mockImplementation((row) => row),
     };
-    service = new SettingsService(prisma as unknown as PrismaService);
+    service = new SettingsService(
+      settings as unknown as Repository<PlatformSettings>,
+    );
   });
 
   describe('get', () => {
-    it('upserts the singleton row (id = 1) so it always exists', async () => {
-      prisma.platformSettings.upsert.mockResolvedValue({ id: 1 });
+    it('returns the existing singleton without creating one', async () => {
+      const row = { id: 1, supportWhatsapp: null, supportEmail: null };
+      settings.findOne.mockResolvedValue(row);
+      expect(await service.get()).toBe(row);
+      expect(settings.save).not.toHaveBeenCalled();
+    });
+
+    it('creates the singleton (id = 1) when missing', async () => {
+      settings.findOne.mockResolvedValue(null);
       await service.get();
-      expect(prisma.platformSettings.upsert).toHaveBeenCalledWith({
-        where: { id: 1 },
-        update: {},
-        create: { id: 1 },
-      });
+      expect(settings.create).toHaveBeenCalledWith({ id: 1 });
+      expect(settings.save).toHaveBeenCalled();
     });
   });
 
   describe('supportContact', () => {
     it('returns the two fields when the row exists', async () => {
-      prisma.platformSettings.findUnique.mockResolvedValue({
+      settings.findOne.mockResolvedValue({
         supportWhatsapp: '+2348000000000',
         supportEmail: 'help@bookam.app',
       });
@@ -45,7 +50,7 @@ describe('SettingsService', () => {
     });
 
     it('defaults to nulls when no row has been created yet', async () => {
-      prisma.platformSettings.findUnique.mockResolvedValue(null);
+      settings.findOne.mockResolvedValue(null);
       expect(await service.supportContact()).toEqual({
         supportWhatsapp: null,
         supportEmail: null,
@@ -54,41 +59,39 @@ describe('SettingsService', () => {
   });
 
   describe('update', () => {
-    it('trims values and upserts the singleton', async () => {
-      prisma.platformSettings.upsert.mockResolvedValue({ id: 1 });
-      await service.update({
+    it('trims values and saves the singleton', async () => {
+      settings.findOne.mockResolvedValue({
+        id: 1,
+        supportWhatsapp: null,
+        supportEmail: null,
+      });
+      const saved = await service.update({
         supportWhatsapp: '  +234 800 000 0000  ',
         supportEmail: ' help@bookam.app ',
       });
-      expect(prisma.platformSettings.upsert).toHaveBeenCalledWith({
-        where: { id: 1 },
-        update: {
-          supportWhatsapp: '+234 800 000 0000',
-          supportEmail: 'help@bookam.app',
-        },
-        create: {
-          id: 1,
-          supportWhatsapp: '+234 800 000 0000',
-          supportEmail: 'help@bookam.app',
-        },
-      });
+      expect(saved.supportWhatsapp).toBe('+234 800 000 0000');
+      expect(saved.supportEmail).toBe('help@bookam.app');
     });
 
     it('stores a blank field as null (clears it)', async () => {
-      prisma.platformSettings.upsert.mockResolvedValue({ id: 1 });
-      await service.update({ supportEmail: '   ' });
-      expect(prisma.platformSettings.upsert).toHaveBeenCalledWith({
-        where: { id: 1 },
-        update: { supportEmail: null },
-        create: { id: 1, supportEmail: null },
+      settings.findOne.mockResolvedValue({
+        id: 1,
+        supportWhatsapp: '+234',
+        supportEmail: 'x@y.z',
       });
+      const saved = await service.update({ supportEmail: '   ' });
+      expect(saved.supportEmail).toBeNull();
     });
 
     it('leaves an omitted field untouched', async () => {
-      prisma.platformSettings.upsert.mockResolvedValue({ id: 1 });
-      await service.update({ supportWhatsapp: '+2348000000000' });
-      const arg = prisma.platformSettings.upsert.mock.calls[0][0];
-      expect(arg.update).not.toHaveProperty('supportEmail');
+      settings.findOne.mockResolvedValue({
+        id: 1,
+        supportWhatsapp: null,
+        supportEmail: 'keep@me.z',
+      });
+      const saved = await service.update({ supportWhatsapp: '+2348000000000' });
+      expect(saved.supportWhatsapp).toBe('+2348000000000');
+      expect(saved.supportEmail).toBe('keep@me.z');
     });
   });
 });

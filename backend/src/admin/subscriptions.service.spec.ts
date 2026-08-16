@@ -1,51 +1,72 @@
 import { NotFoundException } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
+import { Repository } from 'typeorm';
+import { Subscription } from '../entities';
 import { SubscriptionsService } from './subscriptions.service';
 import type { ListSubscriptionsDto } from './dto/query.dto';
 
+/** A minimal loaded subscription (user + plan) for the mapper to consume. */
+function makeSub(overrides: Partial<Subscription> = {}) {
+  return {
+    id: 'sub-1',
+    status: 'ACTIVE',
+    userId: 'user-1',
+    planId: 'plan-1',
+    user: {
+      id: 'user-1',
+      email: 'ada@example.com',
+      name: 'Ada',
+      role: 'MEMBER',
+      status: 'ACTIVE',
+      emailVerifiedAt: null,
+      phone: null,
+      phoneVerifiedAt: null,
+      altPhone: null,
+      bankName: null,
+      bankAccountNumber: null,
+      bankAccountName: null,
+      createdAt: new Date('2026-01-01T00:00:00Z'),
+      passwordHash: 'secret-hash',
+    },
+    plan: { id: 'plan-1', name: 'Starter', priceNaira: 0 },
+    ...overrides,
+  } as unknown as Subscription;
+}
+
 describe('SubscriptionsService', () => {
   let service: SubscriptionsService;
-  let prisma: {
-    subscription: {
-      findMany: jest.Mock;
-      findUnique: jest.Mock;
-      count: jest.Mock;
-      update: jest.Mock;
-    };
-    $transaction: jest.Mock;
+  let subscriptions: {
+    findAndCount: jest.Mock;
+    findOne: jest.Mock;
+    save: jest.Mock;
   };
 
   beforeEach(() => {
-    prisma = {
-      subscription: {
-        findMany: jest.fn(),
-        findUnique: jest.fn(),
-        count: jest.fn(),
-        update: jest.fn(),
-      },
-      $transaction: jest.fn(),
+    subscriptions = {
+      findAndCount: jest.fn(),
+      findOne: jest.fn(),
+      save: jest.fn(),
     };
-    service = new SubscriptionsService(prisma as unknown as PrismaService);
+    service = new SubscriptionsService(
+      subscriptions as unknown as Repository<Subscription>,
+    );
   });
 
   describe('list', () => {
-    it('returns a paginated envelope with no filter by default', async () => {
-      prisma.$transaction.mockResolvedValue([[{ id: 'sub-1' }], 1]);
+    it('returns a paginated envelope and strips the user to a SafeUser', async () => {
+      subscriptions.findAndCount.mockResolvedValue([[makeSub()], 1]);
       const query = { page: 1, pageSize: 20 } as ListSubscriptionsDto;
 
       const result = await service.list(query);
 
-      expect(result).toEqual({
-        items: [{ id: 'sub-1' }],
-        total: 1,
-        page: 1,
-        pageSize: 20,
-      });
-      expect(prisma.subscription.findMany.mock.calls[0][0].where).toEqual({});
+      expect(result.total).toBe(1);
+      expect(result.items[0].id).toBe('sub-1');
+      expect(result.items[0].user).not.toHaveProperty('passwordHash');
+      expect(result.items[0].plan.name).toBe('Starter');
+      expect(subscriptions.findAndCount.mock.calls[0][0].where).toEqual({});
     });
 
     it('filters by status when supplied', async () => {
-      prisma.$transaction.mockResolvedValue([[], 0]);
+      subscriptions.findAndCount.mockResolvedValue([[], 0]);
       const query = {
         page: 1,
         pageSize: 20,
@@ -54,7 +75,7 @@ describe('SubscriptionsService', () => {
 
       await service.list(query);
 
-      expect(prisma.subscription.findMany.mock.calls[0][0].where).toEqual({
+      expect(subscriptions.findAndCount.mock.calls[0][0].where).toEqual({
         status: 'ACTIVE',
       });
     });
@@ -62,29 +83,24 @@ describe('SubscriptionsService', () => {
 
   describe('updateStatus', () => {
     it('updates the status of an existing subscription', async () => {
-      prisma.subscription.findUnique.mockResolvedValue({ id: 'sub-1' });
-      prisma.subscription.update.mockResolvedValue({
-        id: 'sub-1',
-        status: 'CANCELLED',
-      });
+      subscriptions.findOne.mockResolvedValue(makeSub());
+      subscriptions.save.mockImplementation((s) => Promise.resolve(s));
 
       const result = await service.updateStatus('sub-1', 'CANCELLED');
 
-      expect(prisma.subscription.update).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { id: 'sub-1' },
-          data: { status: 'CANCELLED' },
-        }),
+      expect(subscriptions.save).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'sub-1', status: 'CANCELLED' }),
       );
       expect(result.status).toBe('CANCELLED');
+      expect(result.user).not.toHaveProperty('passwordHash');
     });
 
     it('throws NotFound for a missing subscription', async () => {
-      prisma.subscription.findUnique.mockResolvedValue(null);
+      subscriptions.findOne.mockResolvedValue(null);
       await expect(
         service.updateStatus('ghost', 'EXPIRED'),
       ).rejects.toBeInstanceOf(NotFoundException);
-      expect(prisma.subscription.update).not.toHaveBeenCalled();
+      expect(subscriptions.save).not.toHaveBeenCalled();
     });
   });
 });

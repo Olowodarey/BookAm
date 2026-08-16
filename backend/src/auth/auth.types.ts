@@ -1,4 +1,4 @@
-import type { Role, UserStatus } from '@prisma/client';
+import type { Role, UserStatus } from '../entities';
 
 /** User shape safe to return to clients — never includes passwordHash. */
 export interface SafeUser {

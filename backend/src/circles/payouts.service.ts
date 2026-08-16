@@ -1,9 +1,10 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import type { Circle } from '@prisma/client';
-import { PrismaService } from '../prisma/prisma.service';
+import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
+import { DataSource, Repository } from 'typeorm';
+import { Circle, Cycle, Payout, PayoutReceipt } from '../entities';
 import {
   CirclesService,
-  payoutInclude,
+  payoutRelations,
   type OpenCycleState,
 } from './circles.service';
 import {
@@ -17,7 +18,10 @@ import type { CompletePayoutResult, PayoutInfo } from './circles.types';
 @Injectable()
 export class PayoutsService {
   constructor(
-    private readonly prisma: PrismaService,
+    @InjectRepository(Payout) private readonly payouts: Repository<Payout>,
+    @InjectRepository(PayoutReceipt)
+    private readonly receipts: Repository<PayoutReceipt>,
+    @InjectDataSource() private readonly dataSource: DataSource,
     private readonly circles: CirclesService,
     private readonly storage: ReceiptStorageService,
   ) {}
@@ -39,27 +43,37 @@ export class PayoutsService {
     const receiptFileUrl = await this.storage.save(file, 'payout');
     const pot = await this.circles.potNaira(state.cycle.id);
     const amount = resolveReceiptAmount(amountNaira, pot);
-    const payout = await this.prisma.payout.upsert({
+
+    // Upsert the payout for this cycle (unique on cycleId). save() runs the
+    // UUID subscriber; a plain repo.upsert() would bypass it.
+    let payout = await this.payouts.findOne({
       where: { cycleId: state.cycle.id },
-      create: {
+    });
+    if (payout) {
+      payout.receiptFileUrl = receiptFileUrl;
+      payout.collectorId = state.collector!.id;
+    } else {
+      payout = this.payouts.create({
         cycleId: state.cycle.id,
         collectorId: state.collector!.id,
         amountNaira: pot,
         receiptFileUrl,
-      },
-      update: { receiptFileUrl, collectorId: state.collector!.id },
-    });
-    await this.prisma.payoutReceipt.create({
-      data: {
+      });
+    }
+    payout = await this.payouts.save(payout);
+
+    await this.receipts.save(
+      this.receipts.create({
         payoutId: payout.id,
         amountNaira: amount,
         receiptFileUrl,
         uploadedById: coordinatorId,
-      },
-    });
-    const withReceipts = await this.prisma.payout.findUniqueOrThrow({
+      }),
+    );
+
+    const withReceipts = await this.payouts.findOneOrFail({
       where: { id: payout.id },
-      include: payoutInclude,
+      relations: payoutRelations,
     });
     return this.circles.toPayoutInfo(
       withReceipts,
@@ -80,7 +94,7 @@ export class PayoutsService {
       circleId,
       coordinatorId,
     );
-    const existing = await this.prisma.payout.findUnique({
+    const existing = await this.payouts.findOne({
       where: { cycleId: state.cycle.id },
     });
     if (!existing?.receiptFileUrl) {
@@ -97,20 +111,16 @@ export class PayoutsService {
       ) ?? null;
     const now = new Date();
 
-    const payout = await this.prisma.$transaction(async (tx) => {
-      const completed = await tx.payout.update({
-        where: { id: existing.id },
-        data: {
-          status: 'COMPLETED',
-          completedAt: now,
-          amountNaira: pot,
-          collectorId: collector.id,
-        },
-        include: payoutInclude,
+    const payout = await this.dataSource.transaction(async (manager) => {
+      await manager.update(Payout, existing.id, {
+        status: 'COMPLETED',
+        completedAt: now,
+        amountNaira: pot,
+        collectorId: collector.id,
       });
-      await tx.cycle.update({
-        where: { id: state.cycle.id },
-        data: { status: 'COMPLETED', completedAt: now },
+      await manager.update(Cycle, state.cycle.id, {
+        status: 'COMPLETED',
+        completedAt: now,
       });
       if (next) {
         // Carry the schedule forward: the new round's deadline advances by the
@@ -118,21 +128,21 @@ export class PayoutsService {
         const nextDueAt = state.cycle.dueAt
           ? advanceDeadline(state.cycle.dueAt, circle.frequency)
           : null;
-        await tx.cycle.create({
-          data: {
+        await manager.save(
+          manager.create(Cycle, {
             circleId,
             index: state.cycle.index + 1,
             collectorId: next.id,
             ...(nextDueAt ? { dueAt: nextDueAt } : {}),
-          },
-        });
+          }),
+        );
       } else {
-        await tx.circle.update({
-          where: { id: circleId },
-          data: { status: 'COMPLETED' },
-        });
+        await manager.update(Circle, circleId, { status: 'COMPLETED' });
       }
-      return completed;
+      return manager.findOneOrFail(Payout, {
+        where: { id: existing.id },
+        relations: payoutRelations,
+      });
     });
 
     return {

@@ -1,10 +1,16 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { WaitlistEntry } from '../entities';
+import { isUniqueViolation } from '../database/db-errors';
 import type { WaitlistList } from './waitlist.types';
 
 @Injectable()
 export class WaitlistService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    @InjectRepository(WaitlistEntry)
+    private readonly waitlist: Repository<WaitlistEntry>,
+  ) {}
 
   /**
    * Record an early-access signup. Idempotent: re-submitting the same email is
@@ -13,20 +19,27 @@ export class WaitlistService {
    */
   async join(email: string, source?: string): Promise<{ joined: true }> {
     const normalized = email.trim().toLowerCase();
-    await this.prisma.waitlistEntry.upsert({
+    const existing = await this.waitlist.findOne({
       where: { email: normalized },
-      update: {},
-      create: { email: normalized, source: source ?? null },
     });
+    if (!existing) {
+      try {
+        await this.waitlist.save(
+          this.waitlist.create({ email: normalized, source: source ?? null }),
+        );
+      } catch (e) {
+        // Concurrent duplicate signup — the unique index already has it, no-op.
+        if (!isUniqueViolation(e)) throw e;
+      }
+    }
     return { joined: true };
   }
 
   /** Admin view: everyone on the list, newest first, with a running total. */
   async list(): Promise<WaitlistList> {
-    const [entries, total] = await Promise.all([
-      this.prisma.waitlistEntry.findMany({ orderBy: { createdAt: 'desc' } }),
-      this.prisma.waitlistEntry.count(),
-    ]);
+    const [entries, total] = await this.waitlist.findAndCount({
+      order: { createdAt: 'DESC' },
+    });
     return {
       total,
       entries: entries.map((e) => ({

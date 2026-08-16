@@ -1,4 +1,4 @@
-import type { CircleFrequency } from '@prisma/client';
+import type { CircleFrequency } from '../entities';
 
 /**
  * The next round's deadline: advance the previous one by the circle's

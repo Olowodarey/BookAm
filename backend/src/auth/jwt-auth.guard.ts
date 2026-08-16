@@ -6,8 +6,10 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import type { Request } from 'express';
-import { PrismaService } from '../prisma/prisma.service';
+import { User } from '../entities';
 import type { JwtPayload, SafeUser } from './auth.types';
 import { toSafeUser } from './auth.service';
 
@@ -19,7 +21,8 @@ export interface AuthenticatedRequest extends Request {
 export class JwtAuthGuard implements CanActivate {
   constructor(
     private readonly jwt: JwtService,
-    private readonly prisma: PrismaService,
+    @InjectRepository(User)
+    private readonly users: Repository<User>,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -41,9 +44,7 @@ export class JwtAuthGuard implements CanActivate {
 
     // Reload the user so role/status changes take effect immediately,
     // not only when the token expires.
-    const user = await this.prisma.user.findUnique({
-      where: { id: payload.sub },
-    });
+    const user = await this.users.findOne({ where: { id: payload.sub } });
     if (!user) {
       throw new UnauthorizedException('Account no longer exists');
     }

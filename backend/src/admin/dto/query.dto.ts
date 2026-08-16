@@ -5,7 +5,7 @@ import {
   Role,
   SubscriptionStatus,
   UserStatus,
-} from '@prisma/client';
+} from '../../entities';
 
 export class PaginationDto {
   @IsOptional()

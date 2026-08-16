@@ -3,9 +3,16 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
-import type { Circle, Cycle, Membership } from '@prisma/client';
-import { PrismaService } from '../prisma/prisma.service';
+import { InjectRepository } from '@nestjs/typeorm';
+import { FindOptionsRelations, In, Repository } from 'typeorm';
+import {
+  Circle,
+  Contribution,
+  Cycle,
+  Membership,
+  Payout,
+  User,
+} from '../entities';
 import { feeBreakdown } from './fee';
 import type { CreateCircleDto, UpdateCircleDto } from './dto/circle.dto';
 import type {
@@ -19,30 +26,20 @@ import type {
   ReceiptRecord,
 } from './circles.types';
 
-/** Include the uploader's name on each receipt, oldest first. */
-const receiptsInclude = {
-  include: { uploadedBy: { select: { name: true } } },
-  orderBy: { createdAt: 'asc' },
-} as const;
-
-/** Everything toContributionInfo needs — reuse on every contribution fetch. */
-export const contributionInclude = {
+/** Relations toContributionInfo needs — reuse on every contribution fetch. */
+export const contributionRelations: FindOptionsRelations<Contribution> = {
   membership: true,
   reviewedBy: true,
-  receipts: receiptsInclude,
-} satisfies Prisma.ContributionInclude;
+  receipts: { uploadedBy: true },
+};
 
-/** Everything toPayoutInfo needs. */
-export const payoutInclude = {
-  receipts: receiptsInclude,
-} satisfies Prisma.PayoutInclude;
+/** Relations toPayoutInfo needs. */
+export const payoutRelations: FindOptionsRelations<Payout> = {
+  receipts: { uploadedBy: true },
+};
 
-export type ContributionWithRelations = Prisma.ContributionGetPayload<{
-  include: typeof contributionInclude;
-}>;
-export type PayoutWithReceipts = Prisma.PayoutGetPayload<{
-  include: typeof payoutInclude;
-}>;
+export type ContributionWithRelations = Contribution;
+export type PayoutWithReceipts = Payout;
 
 /**
  * The hydrated "what's happening right now" view of a circle's open cycle.
@@ -57,18 +54,42 @@ export interface OpenCycleState {
   collector: Membership | null;
 }
 
+/** Common shape of a contribution/payout installment receipt row. */
+interface ReceiptLike {
+  id: string;
+  amountNaira: number;
+  receiptFileUrl: string;
+  note: string | null;
+  createdAt: Date;
+  uploadedBy: User | null;
+}
+
+/** Receipts arrive unordered from a relation load; show them oldest first. */
+function sortReceipts<T extends { createdAt: Date }>(receipts: T[]): T[] {
+  return [...receipts].sort(
+    (a, b) => a.createdAt.getTime() - b.createdAt.getTime(),
+  );
+}
+
 @Injectable()
 export class CirclesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    @InjectRepository(Circle) private readonly circles: Repository<Circle>,
+    @InjectRepository(Membership)
+    private readonly memberships: Repository<Membership>,
+    @InjectRepository(Cycle) private readonly cycles: Repository<Cycle>,
+    @InjectRepository(Contribution)
+    private readonly contributions: Repository<Contribution>,
+    @InjectRepository(Payout) private readonly payouts: Repository<Payout>,
+    @InjectRepository(User) private readonly users: Repository<User>,
+  ) {}
 
   /**
    * Every coordinator endpoint goes through this: a circle that doesn't exist
    * and a circle owned by someone else both 404, so ids can't be probed.
    */
   async assertOwned(circleId: string, coordinatorId: string): Promise<Circle> {
-    const circle = await this.prisma.circle.findUnique({
-      where: { id: circleId },
-    });
+    const circle = await this.circles.findOne({ where: { id: circleId } });
     if (!circle || circle.coordinatorId !== coordinatorId) {
       throw new NotFoundException('Circle not found');
     }
@@ -76,9 +97,9 @@ export class CirclesService {
   }
 
   activeMembers(circleId: string): Promise<Membership[]> {
-    return this.prisma.membership.findMany({
+    return this.memberships.find({
       where: { circleId, status: 'ACTIVE' },
-      orderBy: { position: 'asc' },
+      order: { position: 'ASC' },
     });
   }
 
@@ -87,11 +108,11 @@ export class CirclesService {
    * at the next ACTIVE position. Rejects if the circle is already full.
    */
   async activate(membershipId: string): Promise<void> {
-    const membership = await this.prisma.membership.findUniqueOrThrow({
+    const membership = await this.memberships.findOneOrFail({
       where: { id: membershipId },
-      include: { circle: true },
+      relations: { circle: true },
     });
-    const activeCount = await this.prisma.membership.count({
+    const activeCount = await this.memberships.count({
       where: { circleId: membership.circleId, status: 'ACTIVE' },
     });
     if (
@@ -102,13 +123,13 @@ export class CirclesService {
         'This circle is already full — the coordinator must make room first',
       );
     }
-    const max = await this.prisma.membership.aggregate({
+    const top = await this.memberships.findOne({
       where: { circleId: membership.circleId, status: 'ACTIVE' },
-      _max: { position: true },
+      order: { position: 'DESC' },
     });
-    await this.prisma.membership.update({
-      where: { id: membershipId },
-      data: { status: 'ACTIVE', position: (max._max.position ?? 0) + 1 },
+    await this.memberships.update(membershipId, {
+      status: 'ACTIVE',
+      position: (top?.position ?? 0) + 1,
     });
     // Rotation changed — re-resolve the open cycle's collector if needed.
     await this.openCycleState(membership.circle);
@@ -118,13 +139,9 @@ export class CirclesService {
   private async memberEmails(
     circleId: string,
   ): Promise<Map<string, string | null>> {
-    const rows = await this.prisma.membership.findMany({
+    const rows = await this.memberships.find({
       where: { circleId },
-      select: {
-        id: true,
-        invitedEmail: true,
-        user: { select: { email: true } },
-      },
+      relations: { user: true },
     });
     return new Map(
       rows.map((r) => [r.id, r.user?.email ?? r.invitedEmail ?? null]),
@@ -139,52 +156,51 @@ export class CirclesService {
    *   position, who hasn't collected yet (covers removed collectors).
    */
   async openCycleState(circle: Circle): Promise<OpenCycleState | null> {
-    const open = await this.prisma.cycle.findFirst({
+    const cycle = await this.cycles.findOne({
       where: { circleId: circle.id, status: 'OPEN' },
-      orderBy: { index: 'desc' },
+      order: { index: 'DESC' },
     });
-    if (!open) return null;
-    let cycle = open;
+    if (!cycle) return null;
 
     const members = await this.activeMembers(circle.id);
 
-    const existing = await this.prisma.contribution.findMany({
+    const existing = await this.contributions.find({
       where: { cycleId: cycle.id },
       select: { membershipId: true },
     });
     const have = new Set(existing.map((c) => c.membershipId));
     const missing = members.filter((m) => !have.has(m.id));
     if (missing.length > 0) {
-      await this.prisma.contribution.createMany({
-        data: missing.map((m) => ({
-          membershipId: m.id,
-          cycleId: open.id,
-          amountNaira: circle.contributionAmountNaira,
-        })),
-        skipDuplicates: true,
-      });
+      await this.contributions.save(
+        missing.map((m) =>
+          this.contributions.create({
+            membershipId: m.id,
+            cycleId: cycle.id,
+            amountNaira: circle.contributionAmountNaira,
+            status: 'AWAITING',
+          }),
+        ),
+      );
     }
 
     const collectedIds = await this.collectedMembershipIds(circle.id);
-    const current = open.collectorId
-      ? members.find((m) => m.id === open.collectorId)
+    const current = cycle.collectorId
+      ? members.find((m) => m.id === cycle.collectorId)
       : undefined;
     const collector =
       current && !collectedIds.has(current.id)
         ? current
         : (members.find((m) => !collectedIds.has(m.id)) ?? null);
     if ((collector?.id ?? null) !== cycle.collectorId) {
-      cycle = await this.prisma.cycle.update({
-        where: { id: cycle.id },
-        data: { collectorId: collector?.id ?? null },
-      });
+      cycle.collectorId = collector?.id ?? null;
+      await this.cycles.update(cycle.id, { collectorId: cycle.collectorId });
     }
 
     return { cycle, members, collectedIds, collector };
   }
 
   async collectedMembershipIds(circleId: string): Promise<Set<string>> {
-    const payouts = await this.prisma.payout.findMany({
+    const payouts = await this.payouts.find({
       where: { status: 'COMPLETED', cycle: { circleId } },
       select: { collectorId: true },
     });
@@ -193,17 +209,21 @@ export class CirclesService {
 
   /** Sum of PAID contributions for a cycle — the pot, as a computed figure. */
   async potNaira(cycleId: string): Promise<number> {
-    const paid = await this.prisma.contribution.aggregate({
-      where: { cycleId, status: 'PAID', membership: { status: 'ACTIVE' } },
-      _sum: { amountNaira: true },
-    });
-    return paid._sum.amountNaira ?? 0;
+    const raw = await this.contributions
+      .createQueryBuilder('c')
+      .innerJoin('c.membership', 'm')
+      .select('COALESCE(SUM(c.amountNaira), 0)', 'sum')
+      .where('c.cycleId = :cycleId', { cycleId })
+      .andWhere('c.status = :status', { status: 'PAID' })
+      .andWhere('m.status = :ms', { ms: 'ACTIVE' })
+      .getRawOne<{ sum: string }>();
+    return Number(raw?.sum ?? 0);
   }
 
   async list(coordinatorId: string): Promise<CircleSummary[]> {
-    const circles = await this.prisma.circle.findMany({
+    const circles = await this.circles.find({
       where: { coordinatorId },
-      orderBy: { createdAt: 'desc' },
+      order: { createdAt: 'DESC' },
     });
     return Promise.all(circles.map((c) => this.summarize(c)));
   }
@@ -213,8 +233,8 @@ export class CirclesService {
     dto: CreateCircleDto,
   ): Promise<CircleSummary> {
     const startDate = dto.startDate ? new Date(dto.startDate) : null;
-    const circle = await this.prisma.circle.create({
-      data: {
+    const circle = await this.circles.save(
+      this.circles.create({
         name: dto.name,
         contributionAmountNaira: dto.amountNaira,
         frequency: dto.frequency,
@@ -222,16 +242,16 @@ export class CirclesService {
         coordinatorFeePercent: dto.feePercent ?? 0,
         startDate,
         coordinatorId,
-      },
-    });
-    await this.prisma.cycle.create({
-      data: {
+      }),
+    );
+    await this.cycles.save(
+      this.cycles.create({
         circleId: circle.id,
         index: 1,
         ...(startDate ? { startedAt: startDate } : {}),
         ...(dto.firstDueAt ? { dueAt: new Date(dto.firstDueAt) } : {}),
-      },
-    });
+      }),
+    );
     return this.summarize(circle);
   }
 
@@ -241,30 +261,22 @@ export class CirclesService {
     coordinatorId: string,
     dto: UpdateCircleDto,
   ): Promise<CircleSummary> {
-    await this.assertOwned(circleId, coordinatorId);
-    const circle = await this.prisma.circle.update({
-      where: { id: circleId },
-      data: {
-        ...(dto.name !== undefined ? { name: dto.name } : {}),
-        ...(dto.feePercent !== undefined
-          ? { coordinatorFeePercent: dto.feePercent }
-          : {}),
-        ...(dto.startDate !== undefined
-          ? { startDate: new Date(dto.startDate) }
-          : {}),
-      },
-    });
+    const circle = await this.assertOwned(circleId, coordinatorId);
+    if (dto.name !== undefined) circle.name = dto.name;
+    if (dto.feePercent !== undefined) {
+      circle.coordinatorFeePercent = dto.feePercent;
+    }
+    if (dto.startDate !== undefined) circle.startDate = new Date(dto.startDate);
+    await this.circles.save(circle);
     // Adjusting the deadline applies to the current open round.
     if (dto.dueAt !== undefined) {
-      const open = await this.prisma.cycle.findFirst({
+      const open = await this.cycles.findOne({
         where: { circleId, status: 'OPEN' },
-        orderBy: { index: 'desc' },
+        order: { index: 'DESC' },
       });
       if (open) {
-        await this.prisma.cycle.update({
-          where: { id: open.id },
-          data: { dueAt: new Date(dto.dueAt) },
-        });
+        open.dueAt = new Date(dto.dueAt);
+        await this.cycles.save(open);
       }
     }
     return this.summarize(circle);
@@ -277,25 +289,25 @@ export class CirclesService {
     const collectedIds =
       state?.collectedIds ?? (await this.collectedMembershipIds(circle.id));
     const emails = await this.memberEmails(circle.id);
-    const pending = await this.prisma.membership.findMany({
-      where: { circleId: circle.id, status: { in: ['REQUESTED', 'INVITED'] } },
-      orderBy: { createdAt: 'asc' },
+    const pending = await this.memberships.find({
+      where: { circleId: circle.id, status: In(['REQUESTED', 'INVITED']) },
+      order: { createdAt: 'ASC' },
     });
 
     let cycleInfo: ActiveCycleInfo | null = null;
     let paidCount = 0;
     let owingCount = 0;
     if (state) {
-      const rows = await this.prisma.contribution.findMany({
+      const rows = await this.contributions.find({
         where: { cycleId: state.cycle.id, membership: { status: 'ACTIVE' } },
-        include: contributionInclude,
+        relations: contributionRelations,
       });
       rows.sort((a, b) => a.membership.position - b.membership.position);
       paidCount = rows.filter((r) => r.status === 'PAID').length;
       owingCount = rows.length - paidCount;
-      const payout = await this.prisma.payout.findUnique({
+      const payout = await this.payouts.findOne({
         where: { cycleId: state.cycle.id },
-        include: payoutInclude,
+        relations: payoutRelations,
       });
       cycleInfo = {
         id: state.cycle.id,
@@ -360,16 +372,16 @@ export class CirclesService {
     const state = await this.openCycleState(circle);
     const activeMembers = state
       ? state.members.length
-      : await this.prisma.membership.count({
+      : await this.memberships.count({
           where: { circleId: circle.id, status: 'ACTIVE' },
         });
 
     let paidCount = 0;
     let owingCount = 0;
     if (state) {
-      const rows = await this.prisma.contribution.findMany({
+      const rows = await this.contributions.find({
         where: { cycleId: state.cycle.id, membership: { status: 'ACTIVE' } },
-        select: { status: true },
+        relations: { membership: true },
       });
       paidCount = rows.filter((r) => r.status === 'PAID').length;
       owingCount = rows.length - paidCount;
@@ -396,7 +408,7 @@ export class CirclesService {
   /** Bank details from a linked user's profile — display-only record. */
   async payoutAccountFor(userId: string | null): Promise<PayoutAccount | null> {
     if (!userId) return null;
-    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    const user = await this.users.findOne({ where: { id: userId } });
     if (!user?.bankAccountNumber) return null;
     return {
       bankName: user.bankName,
@@ -423,14 +435,7 @@ export class CirclesService {
     };
   }
 
-  toReceiptRecord(r: {
-    id: string;
-    amountNaira: number;
-    receiptFileUrl: string;
-    note: string | null;
-    createdAt: Date;
-    uploadedBy: { name: string } | null;
-  }): ReceiptRecord {
+  toReceiptRecord(r: ReceiptLike): ReceiptRecord {
     return {
       id: r.id,
       amountNaira: r.amountNaira,
@@ -442,6 +447,7 @@ export class CirclesService {
   }
 
   toContributionInfo(c: ContributionWithRelations): ContributionInfo {
+    const receipts = sortReceipts(c.receipts);
     return {
       id: c.id,
       membershipId: c.membershipId,
@@ -450,9 +456,9 @@ export class CirclesService {
       position: c.membership.position,
       amountNaira: c.amountNaira,
       status: c.status,
-      paidNaira: c.receipts.reduce((sum, r) => sum + r.amountNaira, 0),
+      paidNaira: receipts.reduce((sum, r) => sum + r.amountNaira, 0),
       receiptFileUrl: c.receiptFileUrl,
-      receipts: c.receipts.map((r) => this.toReceiptRecord(r)),
+      receipts: receipts.map((r) => this.toReceiptRecord(r)),
       rejectionReason: c.rejectionReason,
       reviewedByName: c.reviewedBy?.name ?? null,
       reviewedAt: c.reviewedAt,
@@ -465,15 +471,16 @@ export class CirclesService {
       p.amountNaira,
       feePercent,
     );
+    const receipts = sortReceipts(p.receipts);
     return {
       id: p.id,
       status: p.status,
       amountNaira: p.amountNaira,
       feeNaira,
       netPayoutNaira,
-      paidNaira: p.receipts.reduce((sum, r) => sum + r.amountNaira, 0),
+      paidNaira: receipts.reduce((sum, r) => sum + r.amountNaira, 0),
       receiptFileUrl: p.receiptFileUrl,
-      receipts: p.receipts.map((r) => this.toReceiptRecord(r)),
+      receipts: receipts.map((r) => this.toReceiptRecord(r)),
       completedAt: p.completedAt,
     };
   }

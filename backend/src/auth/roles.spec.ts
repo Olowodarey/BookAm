@@ -1,6 +1,6 @@
 import { ExecutionContext, ForbiddenException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import type { Role } from '@prisma/client';
+import type { Role } from '../entities';
 import type { SafeUser } from './auth.types';
 import { RolesGuard } from './roles';
 

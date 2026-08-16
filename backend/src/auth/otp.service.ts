@@ -1,7 +1,9 @@
 import { BadRequestException, HttpException, Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { IsNull, Repository } from 'typeorm';
 import { randomInt } from 'crypto';
 import * as bcrypt from 'bcryptjs';
-import { PrismaService } from '../prisma/prisma.service';
+import { PhoneOtp } from '../entities';
 import { WhatsAppService } from './whatsapp.service';
 
 const CODE_TTL_MS = 10 * 60 * 1000;
@@ -22,14 +24,15 @@ export interface OtpSendResult {
 @Injectable()
 export class OtpService {
   constructor(
-    private readonly prisma: PrismaService,
+    @InjectRepository(PhoneOtp)
+    private readonly phoneOtp: Repository<PhoneOtp>,
     private readonly whatsapp: WhatsAppService,
   ) {}
 
   async send(phone: string): Promise<OtpSendResult> {
-    const latest = await this.prisma.phoneOtp.findFirst({
+    const latest = await this.phoneOtp.findOne({
       where: { phone },
-      orderBy: { createdAt: 'desc' },
+      order: { createdAt: 'DESC' },
     });
     if (latest) {
       const since = Date.now() - latest.createdAt.getTime();
@@ -42,13 +45,13 @@ export class OtpService {
     }
 
     const code = String(randomInt(0, 1_000_000)).padStart(6, '0');
-    await this.prisma.phoneOtp.create({
-      data: {
+    await this.phoneOtp.save(
+      this.phoneOtp.create({
         phone,
         codeHash: await bcrypt.hash(code, 10),
         expiresAt: new Date(Date.now() + CODE_TTL_MS),
-      },
-    });
+      }),
+    );
 
     await this.whatsapp.sendCode(phone, code);
     return {
@@ -59,9 +62,9 @@ export class OtpService {
 
   /** Consumes the latest valid code for the phone or throws a 400. */
   async verify(phone: string, code: string): Promise<void> {
-    const otp = await this.prisma.phoneOtp.findFirst({
-      where: { phone, consumedAt: null },
-      orderBy: { createdAt: 'desc' },
+    const otp = await this.phoneOtp.findOne({
+      where: { phone, consumedAt: IsNull() },
+      order: { createdAt: 'DESC' },
     });
     if (!otp || otp.expiresAt.getTime() < Date.now()) {
       throw new BadRequestException(
@@ -75,15 +78,9 @@ export class OtpService {
     }
     const ok = await bcrypt.compare(code, otp.codeHash);
     if (!ok) {
-      await this.prisma.phoneOtp.update({
-        where: { id: otp.id },
-        data: { attempts: { increment: 1 } },
-      });
+      await this.phoneOtp.increment({ id: otp.id }, 'attempts', 1);
       throw new BadRequestException('Incorrect code — check and try again');
     }
-    await this.prisma.phoneOtp.update({
-      where: { id: otp.id },
-      data: { consumedAt: new Date() },
-    });
+    await this.phoneOtp.update(otp.id, { consumedAt: new Date() });
   }
 }

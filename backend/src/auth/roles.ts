@@ -7,7 +7,7 @@ import {
   SetMetadata,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import type { Role } from '@prisma/client';
+import type { Role } from '../entities';
 import type { AuthenticatedRequest } from './jwt-auth.guard';
 import type { SafeUser } from './auth.types';
 

@@ -1,5 +1,5 @@
 import { IsEnum } from 'class-validator';
-import { SubscriptionStatus } from '@prisma/client';
+import { SubscriptionStatus } from '../../entities';
 
 export class UpdateSubscriptionStatusDto {
   @IsEnum(SubscriptionStatus)

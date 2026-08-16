@@ -10,7 +10,7 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
-import { CircleFrequency } from '@prisma/client';
+import { CircleFrequency } from '../../entities';
 
 export class CreateCircleDto {
   @IsString()

@@ -2,7 +2,7 @@ import type {
   CollectorApplication,
   Subscription,
   SubscriptionPlan,
-} from '@prisma/client';
+} from '../entities';
 import type { SafeUser } from '../auth/auth.types';
 
 /**
@@ -28,12 +28,15 @@ export interface OverviewMetrics {
   activeRevenueNaira: number;
 }
 
-export type ApplicationWithPeople = CollectorApplication & {
+export type ApplicationWithPeople = Omit<
+  CollectorApplication,
+  'applicant' | 'reviewedBy'
+> & {
   applicant: SafeUser;
   reviewedBy: SafeUser | null;
 };
 
-export type SubscriptionWithRelations = Subscription & {
+export type SubscriptionWithRelations = Omit<Subscription, 'user' | 'plan'> & {
   user: SafeUser;
   plan: SubscriptionPlan;
 };

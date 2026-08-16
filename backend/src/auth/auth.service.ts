@@ -7,9 +7,10 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import type { User } from '@prisma/client';
+import { InjectRepository } from '@nestjs/typeorm';
+import { IsNull, Repository } from 'typeorm';
 import * as bcrypt from 'bcryptjs';
-import { PrismaService } from '../prisma/prisma.service';
+import { Membership, User } from '../entities';
 import { OtpService } from './otp.service';
 import { EmailOtpService } from './email-otp.service';
 import type {
@@ -57,7 +58,10 @@ interface GoogleTokenInfo {
 @Injectable()
 export class AuthService {
   constructor(
-    private readonly prisma: PrismaService,
+    @InjectRepository(User)
+    private readonly users: Repository<User>,
+    @InjectRepository(Membership)
+    private readonly memberships: Repository<Membership>,
     private readonly jwt: JwtService,
     private readonly otp: OtpService,
     private readonly emailOtp: EmailOtpService,
@@ -69,7 +73,7 @@ export class AuthService {
 
   async login(email: string, password: string): Promise<LoginResponse> {
     email = AuthService.normalizeEmail(email);
-    const user = await this.prisma.user.findUnique({ where: { email } });
+    const user = await this.users.findOne({ where: { email } });
     if (!user?.passwordHash) {
       throw new UnauthorizedException('Invalid email or password');
     }
@@ -100,7 +104,7 @@ export class AuthService {
     password: string,
   ): Promise<OtpSentResponse> {
     email = AuthService.normalizeEmail(email);
-    const existing = await this.prisma.user.findUnique({ where: { email } });
+    const existing = await this.users.findOne({ where: { email } });
     if (existing?.emailVerifiedAt) {
       // Never set a password on an already-verified account here — that would
       // be account takeover. Google-only users add a password via forgot-password.
@@ -111,14 +115,13 @@ export class AuthService {
     const passwordHash = await bcrypt.hash(password, 10);
     if (existing) {
       // Unfinished sign-up: refresh the details and resend the code.
-      await this.prisma.user.update({
-        where: { id: existing.id },
-        data: { name, passwordHash },
-      });
+      existing.name = name;
+      existing.passwordHash = passwordHash;
+      await this.users.save(existing);
     } else {
-      await this.prisma.user.create({
-        data: { email, name, passwordHash, role: 'MEMBER' },
-      });
+      await this.users.save(
+        this.users.create({ email, name, passwordHash, role: 'MEMBER' }),
+      );
     }
     return { requiresVerification: true, ...(await this.emailOtp.send(email)) };
   }
@@ -127,14 +130,12 @@ export class AuthService {
   async verifyEmail(email: string, code: string): Promise<LoginResponse> {
     email = AuthService.normalizeEmail(email);
     await this.emailOtp.verify(email, code);
-    const existing = await this.prisma.user.findUnique({ where: { email } });
+    const existing = await this.users.findOne({ where: { email } });
     if (!existing) {
       throw new BadRequestException('No sign-up found for this email');
     }
-    const user = await this.prisma.user.update({
-      where: { id: existing.id },
-      data: { emailVerifiedAt: existing.emailVerifiedAt ?? new Date() },
-    });
+    existing.emailVerifiedAt = existing.emailVerifiedAt ?? new Date();
+    const user = await this.users.save(existing);
     if (user.status === 'SUSPENDED') {
       throw new ForbiddenException('This account is suspended');
     }
@@ -186,37 +187,33 @@ export class AuthService {
 
     const email = AuthService.normalizeEmail(info.email);
     const existing =
-      (await this.prisma.user.findUnique({ where: { googleId: info.sub } })) ??
-      (await this.prisma.user.findUnique({ where: { email } }));
+      (await this.users.findOne({ where: { googleId: info.sub } })) ??
+      (await this.users.findOne({ where: { email } }));
 
     if (existing) {
       if (existing.status === 'SUSPENDED') {
         throw new ForbiddenException('This account is suspended');
       }
       // Link the Google credential and trust the verified email.
-      const user =
-        existing.googleId && existing.emailVerifiedAt
-          ? existing
-          : await this.prisma.user.update({
-              where: { id: existing.id },
-              data: {
-                googleId: existing.googleId ?? info.sub,
-                emailVerifiedAt: existing.emailVerifiedAt ?? new Date(),
-              },
-            });
+      let user = existing;
+      if (!(existing.googleId && existing.emailVerifiedAt)) {
+        existing.googleId = existing.googleId ?? info.sub;
+        existing.emailVerifiedAt = existing.emailVerifiedAt ?? new Date();
+        user = await this.users.save(existing);
+      }
       await this.claimEmailInvites(user);
       return this.issueSession(user);
     }
 
-    const created = await this.prisma.user.create({
-      data: {
+    const created = await this.users.save(
+      this.users.create({
         email,
         name: info.name ?? email.split('@')[0],
         googleId: info.sub,
         role: 'MEMBER',
         emailVerifiedAt: new Date(),
-      },
-    });
+      }),
+    );
     await this.claimEmailInvites(created);
     return this.issueSession(created);
   }
@@ -241,25 +238,22 @@ export class AuthService {
       bankAccountName?: string;
     },
   ): Promise<SafeUser> {
-    const user = await this.prisma.user.update({
-      where: { id: userId },
-      data: {
-        ...(dto.name !== undefined ? { name: dto.name.trim() } : {}),
-        ...(dto.altPhone !== undefined
-          ? { altPhone: AuthService.clearable(dto.altPhone) }
-          : {}),
-        ...(dto.bankName !== undefined
-          ? { bankName: AuthService.clearable(dto.bankName) }
-          : {}),
-        ...(dto.bankAccountNumber !== undefined
-          ? { bankAccountNumber: AuthService.clearable(dto.bankAccountNumber) }
-          : {}),
-        ...(dto.bankAccountName !== undefined
-          ? { bankAccountName: AuthService.clearable(dto.bankAccountName) }
-          : {}),
-      },
-    });
-    return toSafeUser(user);
+    const user = await this.users.findOneByOrFail({ id: userId });
+    if (dto.name !== undefined) user.name = dto.name.trim();
+    if (dto.altPhone !== undefined) {
+      user.altPhone = AuthService.clearable(dto.altPhone) ?? null;
+    }
+    if (dto.bankName !== undefined) {
+      user.bankName = AuthService.clearable(dto.bankName) ?? null;
+    }
+    if (dto.bankAccountNumber !== undefined) {
+      user.bankAccountNumber =
+        AuthService.clearable(dto.bankAccountNumber) ?? null;
+    }
+    if (dto.bankAccountName !== undefined) {
+      user.bankAccountName = AuthService.clearable(dto.bankAccountName) ?? null;
+    }
+    return toSafeUser(await this.users.save(user));
   }
 
   async changePassword(
@@ -267,19 +261,15 @@ export class AuthService {
     currentPassword: string,
     newPassword: string,
   ): Promise<{ changed: true }> {
-    const user = await this.prisma.user.findUniqueOrThrow({
-      where: { id: userId },
-    });
+    const user = await this.users.findOneByOrFail({ id: userId });
     if (
       !user.passwordHash ||
       !(await bcrypt.compare(currentPassword, user.passwordHash))
     ) {
       throw new UnauthorizedException('Current password is not correct');
     }
-    await this.prisma.user.update({
-      where: { id: userId },
-      data: { passwordHash: await bcrypt.hash(newPassword, 10) },
-    });
+    user.passwordHash = await bcrypt.hash(newPassword, 10);
+    await this.users.save(user);
     return { changed: true };
   }
 
@@ -289,7 +279,7 @@ export class AuthService {
    *  to a Google-only account, since the code proves email ownership). */
   async forgotPassword(email: string): Promise<OtpSentResponse> {
     email = AuthService.normalizeEmail(email);
-    const user = await this.prisma.user.findUnique({ where: { email } });
+    const user = await this.users.findOne({ where: { email } });
     if (!user) {
       throw new BadRequestException(
         'No account with this email — create one instead',
@@ -312,17 +302,13 @@ export class AuthService {
   ): Promise<LoginResponse> {
     email = AuthService.normalizeEmail(email);
     await this.emailOtp.verify(email, code);
-    const existing = await this.prisma.user.findUnique({ where: { email } });
+    const existing = await this.users.findOne({ where: { email } });
     if (!existing) {
       throw new BadRequestException('No account with this email');
     }
-    const user = await this.prisma.user.update({
-      where: { id: existing.id },
-      data: {
-        passwordHash: await bcrypt.hash(newPassword, 10),
-        emailVerifiedAt: existing.emailVerifiedAt ?? new Date(),
-      },
-    });
+    existing.passwordHash = await bcrypt.hash(newPassword, 10);
+    existing.emailVerifiedAt = existing.emailVerifiedAt ?? new Date();
+    const user = await this.users.save(existing);
     if (user.status === 'SUSPENDED') {
       throw new ForbiddenException('This account is suspended');
     }
@@ -333,7 +319,7 @@ export class AuthService {
 
   /** Sends an OTP to the WhatsApp/phone number the signed-in user wants to add. */
   async sendPhoneOtp(userId: string, phone: string): Promise<OtpSentResponse> {
-    const owner = await this.prisma.user.findUnique({ where: { phone } });
+    const owner = await this.users.findOne({ where: { phone } });
     if (owner && owner.id !== userId) {
       throw new ConflictException(
         'This phone number is already linked to another account',
@@ -352,16 +338,16 @@ export class AuthService {
     code: string,
   ): Promise<SafeUser> {
     await this.otp.verify(phone, code);
-    const owner = await this.prisma.user.findUnique({ where: { phone } });
+    const owner = await this.users.findOne({ where: { phone } });
     if (owner && owner.id !== userId) {
       throw new ConflictException(
         'This phone number is already linked to another account',
       );
     }
-    const user = await this.prisma.user.update({
-      where: { id: userId },
-      data: { phone, phoneVerifiedAt: new Date() },
-    });
+    const user = await this.users.findOneByOrFail({ id: userId });
+    user.phone = phone;
+    user.phoneVerifiedAt = new Date();
+    await this.users.save(user);
     await this.claimMemberships(user);
     return toSafeUser(user);
   }
@@ -372,10 +358,10 @@ export class AuthService {
    */
   private async claimMemberships(user: User): Promise<void> {
     if (!user.phone) return;
-    await this.prisma.membership.updateMany({
-      where: { phone: user.phone, userId: null },
-      data: { userId: user.id },
-    });
+    await this.memberships.update(
+      { phone: user.phone, userId: IsNull() },
+      { userId: user.id },
+    );
   }
 
   /**
@@ -384,10 +370,10 @@ export class AuthService {
    * become theirs — they then show up under "Circle invites" to accept.
    */
   private async claimEmailInvites(user: User): Promise<void> {
-    await this.prisma.membership.updateMany({
-      where: { invitedEmail: user.email, userId: null, status: 'INVITED' },
-      data: { userId: user.id, name: user.name },
-    });
+    await this.memberships.update(
+      { invitedEmail: user.email, userId: IsNull(), status: 'INVITED' },
+      { userId: user.id, name: user.name },
+    );
   }
 
   private async issueSession(user: User): Promise<LoginResponse> {

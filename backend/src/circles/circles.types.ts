@@ -7,7 +7,7 @@ import type {
   MembershipStatus,
   PayoutStatus,
   VoteValue,
-} from '@prisma/client';
+} from '../entities';
 
 /**
  * Response shapes for the coordinator circles API. The frontend mirrors these

@@ -1,10 +1,19 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { Circle, CollectorApplication, Subscription, User } from '../entities';
 import type { OverviewMetrics } from './admin.types';
 
 @Injectable()
 export class OverviewService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    @InjectRepository(User) private readonly users: Repository<User>,
+    @InjectRepository(Circle) private readonly circles: Repository<Circle>,
+    @InjectRepository(CollectorApplication)
+    private readonly applications: Repository<CollectorApplication>,
+    @InjectRepository(Subscription)
+    private readonly subscriptions: Repository<Subscription>,
+  ) {}
 
   async metrics(): Promise<OverviewMetrics> {
     const [
@@ -14,15 +23,15 @@ export class OverviewService {
       pendingApplications,
       activeSubscriptions,
       activeSubs,
-    ] = await this.prisma.$transaction([
-      this.prisma.user.count(),
-      this.prisma.user.count({ where: { role: 'COORDINATOR' } }),
-      this.prisma.circle.count(),
-      this.prisma.collectorApplication.count({ where: { status: 'PENDING' } }),
-      this.prisma.subscription.count({ where: { status: 'ACTIVE' } }),
-      this.prisma.subscription.findMany({
+    ] = await Promise.all([
+      this.users.count(),
+      this.users.count({ where: { role: 'COORDINATOR' } }),
+      this.circles.count(),
+      this.applications.count({ where: { status: 'PENDING' } }),
+      this.subscriptions.count({ where: { status: 'ACTIVE' } }),
+      this.subscriptions.find({
         where: { status: 'ACTIVE' },
-        select: { plan: { select: { priceNaira: true } } },
+        relations: { plan: true },
       }),
     ]);
 

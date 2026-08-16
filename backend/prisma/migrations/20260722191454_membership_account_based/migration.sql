@@ -1,4 +1,0 @@
--- AlterTable
-ALTER TABLE "Membership" ALTER COLUMN "phone" DROP NOT NULL,
-ALTER COLUMN "position" SET DEFAULT 0,
-ALTER COLUMN "status" SET DEFAULT 'INVITED';

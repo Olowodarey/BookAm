@@ -4,9 +4,14 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import type { CircleFrequency } from '@prisma/client';
-import { PrismaService } from '../prisma/prisma.service';
-import { CirclesService, contributionInclude } from './circles.service';
+import { InjectRepository } from '@nestjs/typeorm';
+import { In, Repository } from 'typeorm';
+import {
+  CircleFrequency,
+  Contribution,
+  ContributionReceipt,
+} from '../entities';
+import { CirclesService, contributionRelations } from './circles.service';
 import {
   ReceiptStorageService,
   type ReceiptFile,
@@ -23,7 +28,10 @@ const FREQUENCY_LABEL: Record<CircleFrequency, string> = {
 @Injectable()
 export class ContributionsService {
   constructor(
-    private readonly prisma: PrismaService,
+    @InjectRepository(Contribution)
+    private readonly contributions: Repository<Contribution>,
+    @InjectRepository(ContributionReceipt)
+    private readonly receipts: Repository<ContributionReceipt>,
     private readonly circles: CirclesService,
     private readonly storage: ReceiptStorageService,
   ) {}
@@ -52,14 +60,14 @@ export class ContributionsService {
     }
     const receiptFileUrl = await this.storage.save(file, 'contribution');
     const amount = resolveReceiptAmount(amountNaira, contribution.amountNaira);
-    await this.prisma.contributionReceipt.create({
-      data: {
+    await this.receipts.save(
+      this.receipts.create({
         contributionId,
         amountNaira: amount,
         receiptFileUrl,
         uploadedById: coordinatorId,
-      },
-    });
+      }),
+    );
     return this.updateAndMap(contributionId, {
       receiptFileUrl,
       status: 'PENDING_REVIEW',
@@ -132,13 +140,13 @@ export class ContributionsService {
     if (!state) {
       throw new BadRequestException('This circle has no open cycle');
     }
-    const owing = await this.prisma.contribution.findMany({
+    const owing = await this.contributions.find({
       where: {
         cycleId: state.cycle.id,
-        status: { in: ['AWAITING', 'REJECTED'] },
+        status: In(['AWAITING', 'REJECTED']),
         membership: { status: 'ACTIVE' },
       },
-      include: { membership: true },
+      relations: { membership: true },
     });
     owing.sort((a, b) => a.membership.position - b.membership.position);
 
@@ -168,11 +176,11 @@ export class ContributionsService {
     circleId: string,
     coordinatorId: string,
     contributionId: string,
-  ) {
+  ): Promise<Contribution> {
     await this.circles.assertOwned(circleId, coordinatorId);
-    const contribution = await this.prisma.contribution.findUnique({
+    const contribution = await this.contributions.findOne({
       where: { id: contributionId },
-      include: { cycle: true, membership: true },
+      relations: { cycle: true, membership: true },
     });
     if (
       !contribution ||
@@ -189,12 +197,12 @@ export class ContributionsService {
 
   private async updateAndMap(
     contributionId: string,
-    data: Parameters<PrismaService['contribution']['update']>[0]['data'],
+    data: Partial<Contribution>,
   ): Promise<ContributionInfo> {
-    const updated = await this.prisma.contribution.update({
+    await this.contributions.update(contributionId, data);
+    const updated = await this.contributions.findOneOrFail({
       where: { id: contributionId },
-      data,
-      include: contributionInclude,
+      relations: contributionRelations,
     });
     return this.circles.toContributionInfo(updated);
   }

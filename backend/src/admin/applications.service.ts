@@ -3,61 +3,72 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
-import { PrismaService } from '../prisma/prisma.service';
+import { InjectRepository } from '@nestjs/typeorm';
+import { FindOptionsWhere, ILike, Repository } from 'typeorm';
+import { CollectorApplication, User } from '../entities';
+import { toSafeUser } from '../auth/auth.service';
 import type { ApplicationWithPeople, Paginated } from './admin.types';
 import type { ListApplicationsDto } from './dto/query.dto';
-import { safeUserSelect } from './safe-user.select';
 
-const withPeople = {
-  applicant: { select: safeUserSelect },
-  reviewedBy: { select: safeUserSelect },
-} satisfies Prisma.CollectorApplicationInclude;
+/** Strips applicant + reviewedBy down to SafeUser (no passwordHash). */
+function toWithPeople(a: CollectorApplication): ApplicationWithPeople {
+  const { applicant, reviewedBy, ...rest } = a;
+  return {
+    ...rest,
+    applicant: toSafeUser(applicant),
+    reviewedBy: reviewedBy ? toSafeUser(reviewedBy) : null,
+  };
+}
 
 @Injectable()
 export class ApplicationsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    @InjectRepository(CollectorApplication)
+    private readonly applications: Repository<CollectorApplication>,
+    @InjectRepository(User) private readonly users: Repository<User>,
+  ) {}
 
   async list(
     query: ListApplicationsDto,
   ): Promise<Paginated<ApplicationWithPeople>> {
-    const where: Prisma.CollectorApplicationWhereInput = {
-      ...(query.status ? { status: query.status } : {}),
-      ...(query.search
-        ? {
-            applicant: {
-              OR: [
-                { name: { contains: query.search, mode: 'insensitive' } },
-                { phone: { contains: query.search } },
-              ],
-            },
-          }
-        : {}),
+    const statusWhere: FindOptionsWhere<CollectorApplication> = query.status
+      ? { status: query.status }
+      : {};
+    // Search matches the applicant's name (case-insensitive) OR phone.
+    const where:
+      | FindOptionsWhere<CollectorApplication>
+      | FindOptionsWhere<CollectorApplication>[] = query.search
+      ? [
+          { ...statusWhere, applicant: { name: ILike(`%${query.search}%`) } },
+          { ...statusWhere, applicant: { phone: ILike(`%${query.search}%`) } },
+        ]
+      : statusWhere;
+
+    const [items, total] = await this.applications.findAndCount({
+      where,
+      relations: { applicant: true, reviewedBy: true },
+      order: { createdAt: 'DESC' },
+      skip: (query.page - 1) * query.pageSize,
+      take: query.pageSize,
+    });
+
+    return {
+      items: items.map(toWithPeople),
+      total,
+      page: query.page,
+      pageSize: query.pageSize,
     };
-
-    const [items, total] = await this.prisma.$transaction([
-      this.prisma.collectorApplication.findMany({
-        where,
-        include: withPeople,
-        orderBy: { createdAt: 'desc' },
-        skip: (query.page - 1) * query.pageSize,
-        take: query.pageSize,
-      }),
-      this.prisma.collectorApplication.count({ where }),
-    ]);
-
-    return { items, total, page: query.page, pageSize: query.pageSize };
   }
 
   async get(id: string): Promise<ApplicationWithPeople> {
-    const application = await this.prisma.collectorApplication.findUnique({
+    const application = await this.applications.findOne({
       where: { id },
-      include: withPeople,
+      relations: { applicant: true, reviewedBy: true },
     });
     if (!application) {
       throw new NotFoundException('Application not found');
     }
-    return application;
+    return toWithPeople(application);
   }
 
   async approve(
@@ -65,30 +76,25 @@ export class ApplicationsService {
     reviewerId: string,
     reviewNote?: string,
   ): Promise<ApplicationWithPeople> {
-    const application = await this.get(id);
+    const application = await this.applications.findOne({ where: { id } });
+    if (!application) throw new NotFoundException('Application not found');
     if (application.status !== 'PENDING') {
       throw new ConflictException('This application has already been reviewed');
     }
 
-    const [updated] = await this.prisma.$transaction([
-      this.prisma.collectorApplication.update({
-        where: { id },
-        data: {
-          status: 'APPROVED',
-          reviewNote: reviewNote ?? null,
-          reviewedById: reviewerId,
-          reviewedAt: new Date(),
-        },
-        include: withPeople,
-      }),
-      // Promote member → coordinator; never demote an admin applicant.
-      this.prisma.user.updateMany({
-        where: { id: application.applicantId, role: 'MEMBER' },
-        data: { role: 'COORDINATOR' },
-      }),
-    ]);
+    application.status = 'APPROVED';
+    application.reviewNote = reviewNote ?? null;
+    application.reviewedById = reviewerId;
+    application.reviewedAt = new Date();
+    await this.applications.save(application);
 
-    return this.get(updated.id);
+    // Promote member → coordinator; never demote an admin applicant.
+    await this.users.update(
+      { id: application.applicantId, role: 'MEMBER' },
+      { role: 'COORDINATOR' },
+    );
+
+    return this.get(id);
   }
 
   async reject(
@@ -96,20 +102,18 @@ export class ApplicationsService {
     reviewerId: string,
     reviewNote?: string,
   ): Promise<ApplicationWithPeople> {
-    const application = await this.get(id);
+    const application = await this.applications.findOne({ where: { id } });
+    if (!application) throw new NotFoundException('Application not found');
     if (application.status !== 'PENDING') {
       throw new ConflictException('This application has already been reviewed');
     }
 
-    return this.prisma.collectorApplication.update({
-      where: { id },
-      data: {
-        status: 'REJECTED',
-        reviewNote: reviewNote ?? null,
-        reviewedById: reviewerId,
-        reviewedAt: new Date(),
-      },
-      include: withPeople,
-    });
+    application.status = 'REJECTED';
+    application.reviewNote = reviewNote ?? null;
+    application.reviewedById = reviewerId;
+    application.reviewedAt = new Date();
+    await this.applications.save(application);
+
+    return this.get(id);
   }
 }

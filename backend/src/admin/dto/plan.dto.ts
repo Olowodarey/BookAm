@@ -10,7 +10,7 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
-import { BillingInterval } from '@prisma/client';
+import { BillingInterval } from '../../entities';
 
 export class CreatePlanDto {
   @IsString()

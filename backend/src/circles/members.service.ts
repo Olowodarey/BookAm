@@ -4,9 +4,10 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { In, Repository } from 'typeorm';
 import { randomBytes } from 'crypto';
-import type { Circle } from '@prisma/client';
-import { PrismaService } from '../prisma/prisma.service';
+import { Circle, Membership, User } from '../entities';
 import { EmailService } from '../auth/email.service';
 import { CirclesService } from './circles.service';
 import type { InviteMemberDto } from './dto/member.dto';
@@ -20,10 +21,15 @@ function frontendUrl(): string {
   return process.env.FRONTEND_URL ?? 'http://localhost:3000';
 }
 
+const PENDING_OR_ACTIVE = In(['INVITED', 'REQUESTED', 'ACTIVE']);
+
 @Injectable()
 export class MembersService {
   constructor(
-    private readonly prisma: PrismaService,
+    @InjectRepository(Membership)
+    private readonly membershipRepo: Repository<Membership>,
+    @InjectRepository(User) private readonly userRepo: Repository<User>,
+    @InjectRepository(Circle) private readonly circleRepo: Repository<Circle>,
     private readonly circles: CirclesService,
     private readonly email: EmailService,
   ) {}
@@ -42,22 +48,22 @@ export class MembersService {
   ): Promise<MemberInfo> {
     const circle = await this.circles.assertOwned(circleId, coordinatorId);
     const email = dto.email.trim().toLowerCase();
-    const coordinator = await this.prisma.user.findUniqueOrThrow({
-      where: { id: coordinatorId },
+    const coordinator = await this.userRepo.findOneByOrFail({
+      id: coordinatorId,
     });
-    const user = await this.prisma.user.findUnique({ where: { email } });
+    const user = await this.userRepo.findOne({ where: { email } });
     await this.assertNotAlreadyInvited(circleId, email, user?.id ?? null);
 
-    const membership = await this.prisma.membership.create({
-      data: {
+    const membership = await this.membershipRepo.save(
+      this.membershipRepo.create({
         circleId,
         userId: user?.id ?? null,
         name: user?.name ?? email.split('@')[0],
         phone: user?.phone ?? null,
         invitedEmail: email,
         status: 'INVITED',
-      },
-    });
+      }),
+    );
 
     // Best-effort email — never fail the invite if the mail can't be sent.
     await this.sendInviteEmail(
@@ -98,12 +104,8 @@ export class MembersService {
    */
   async joinSelf(circleId: string, coordinatorId: string): Promise<MemberInfo> {
     await this.circles.assertOwned(circleId, coordinatorId);
-    const existing = await this.prisma.membership.findFirst({
-      where: {
-        circleId,
-        userId: coordinatorId,
-        status: { in: ['INVITED', 'REQUESTED', 'ACTIVE'] },
-      },
+    const existing = await this.membershipRepo.findOne({
+      where: { circleId, userId: coordinatorId, status: PENDING_OR_ACTIVE },
     });
     if (existing) {
       if (existing.status === 'ACTIVE') {
@@ -111,23 +113,21 @@ export class MembersService {
       }
       await this.circles.activate(existing.id);
     } else {
-      const user = await this.prisma.user.findUniqueOrThrow({
-        where: { id: coordinatorId },
-      });
-      const created = await this.prisma.membership.create({
-        data: {
+      const user = await this.userRepo.findOneByOrFail({ id: coordinatorId });
+      const created = await this.membershipRepo.save(
+        this.membershipRepo.create({
           circleId,
           userId: coordinatorId,
           name: user.name,
           phone: user.phone,
           status: 'INVITED',
-        },
-      });
+        }),
+      );
       await this.circles.activate(created.id);
     }
-    const membership = await this.prisma.membership.findFirstOrThrow({
+    const membership = await this.membershipRepo.findOneOrFail({
       where: { circleId, userId: coordinatorId },
-      include: { user: { select: { email: true } } },
+      relations: { user: true },
     });
     const collectedIds = await this.circles.collectedMembershipIds(circleId);
     return this.circles.toMemberInfo(
@@ -143,16 +143,13 @@ export class MembersService {
     coordinatorId: string,
   ): Promise<{ removed: true }> {
     await this.circles.assertOwned(circleId, coordinatorId);
-    const membership = await this.prisma.membership.findFirst({
+    const membership = await this.membershipRepo.findOne({
       where: { circleId, userId: coordinatorId, status: 'ACTIVE' },
     });
     if (!membership) {
       throw new NotFoundException('You are not in this circle');
     }
-    await this.prisma.membership.update({
-      where: { id: membership.id },
-      data: { status: 'REMOVED' },
-    });
+    await this.membershipRepo.update(membership.id, { status: 'REMOVED' });
     return { removed: true };
   }
 
@@ -169,9 +166,9 @@ export class MembersService {
       'REQUESTED',
     );
     await this.circles.activate(membership.id);
-    const updated = await this.prisma.membership.findUniqueOrThrow({
+    const updated = await this.membershipRepo.findOneOrFail({
       where: { id: membership.id },
-      include: { user: { select: { email: true } } },
+      relations: { user: true },
     });
     const collectedIds = await this.circles.collectedMembershipIds(circleId);
     return this.circles.toMemberInfo(
@@ -188,7 +185,7 @@ export class MembersService {
     membershipId: string,
   ): Promise<{ removed: true }> {
     await this.circles.assertOwned(circleId, coordinatorId);
-    const membership = await this.prisma.membership.findUnique({
+    const membership = await this.membershipRepo.findOne({
       where: { id: membershipId },
     });
     if (
@@ -198,7 +195,7 @@ export class MembersService {
     ) {
       throw new NotFoundException('No pending request or invite to remove');
     }
-    await this.prisma.membership.delete({ where: { id: membershipId } });
+    await this.membershipRepo.delete(membershipId);
     return { removed: true };
   }
 
@@ -208,7 +205,7 @@ export class MembersService {
     membershipId: string,
   ): Promise<{ removed: true }> {
     await this.circles.assertOwned(circleId, coordinatorId);
-    const membership = await this.prisma.membership.findUnique({
+    const membership = await this.membershipRepo.findOne({
       where: { id: membershipId },
     });
     if (
@@ -220,10 +217,7 @@ export class MembersService {
     }
     // Soft-remove: their past contribution/payout records stay intact.
     // If they were this cycle's collector, openCycleState re-resolves it.
-    await this.prisma.membership.update({
-      where: { id: membershipId },
-      data: { status: 'REMOVED' },
-    });
+    await this.membershipRepo.update(membershipId, { status: 'REMOVED' });
     return { removed: true };
   }
 
@@ -246,12 +240,9 @@ export class MembersService {
       );
     }
 
-    await this.prisma.$transaction(
+    await Promise.all(
       orderedMembershipIds.map((id, index) =>
-        this.prisma.membership.update({
-          where: { id },
-          data: { position: index + 1 },
-        }),
+        this.membershipRepo.update(id, { position: index + 1 }),
       ),
     );
 
@@ -273,10 +264,7 @@ export class MembersService {
   ): Promise<InviteLinkResponse> {
     await this.circles.assertOwned(circleId, coordinatorId);
     const inviteToken = randomBytes(12).toString('hex');
-    await this.prisma.circle.update({
-      where: { id: circleId },
-      data: { inviteToken },
-    });
+    await this.circleRepo.update(circleId, { inviteToken });
     return { inviteToken, inviteUrl: this.inviteUrl(inviteToken) };
   }
 
@@ -285,10 +273,7 @@ export class MembersService {
     coordinatorId: string,
   ): Promise<{ disabled: true }> {
     await this.circles.assertOwned(circleId, coordinatorId);
-    await this.prisma.circle.update({
-      where: { id: circleId },
-      data: { inviteToken: null },
-    });
+    await this.circleRepo.update(circleId, { inviteToken: null });
     return { disabled: true };
   }
 
@@ -303,8 +288,8 @@ export class MembersService {
   async preview(token: string): Promise<InvitePreview> {
     const circle = await this.circleByToken(token);
     const [coordinator, activeMembers] = await Promise.all([
-      this.prisma.user.findUnique({ where: { id: circle.coordinatorId } }),
-      this.prisma.membership.count({
+      this.userRepo.findOne({ where: { id: circle.coordinatorId } }),
+      this.membershipRepo.count({
         where: { circleId: circle.id, status: 'ACTIVE' },
       }),
     ]);
@@ -327,15 +312,9 @@ export class MembersService {
     userId: string,
   ): Promise<{ requested: true; circleName: string }> {
     const circle = await this.circleByToken(token);
-    const user = await this.prisma.user.findUniqueOrThrow({
-      where: { id: userId },
-    });
-    const existing = await this.prisma.membership.findFirst({
-      where: {
-        circleId: circle.id,
-        userId,
-        status: { in: ['INVITED', 'REQUESTED', 'ACTIVE'] },
-      },
+    const user = await this.userRepo.findOneByOrFail({ id: userId });
+    const existing = await this.membershipRepo.findOne({
+      where: { circleId: circle.id, userId, status: PENDING_OR_ACTIVE },
     });
     if (existing) {
       if (existing.status === 'ACTIVE') {
@@ -350,20 +329,20 @@ export class MembersService {
         'You already have a pending request for this circle',
       );
     }
-    await this.prisma.membership.create({
-      data: {
+    await this.membershipRepo.save(
+      this.membershipRepo.create({
         circleId: circle.id,
         userId,
         name: user.name,
         phone: user.phone,
         status: 'REQUESTED',
-      },
-    });
+      }),
+    );
     return { requested: true, circleName: circle.name };
   }
 
   private async circleByToken(token: string): Promise<Circle> {
-    const circle = await this.prisma.circle.findUnique({
+    const circle = await this.circleRepo.findOne({
       where: { inviteToken: token },
     });
     if (!circle || circle.status !== 'ACTIVE') {
@@ -380,12 +359,11 @@ export class MembersService {
     email: string,
     userId: string | null,
   ): Promise<void> {
-    const existing = await this.prisma.membership.findFirst({
-      where: {
-        circleId,
-        status: { in: ['INVITED', 'REQUESTED', 'ACTIVE'] },
-        OR: [{ invitedEmail: email }, ...(userId ? [{ userId }] : [])],
-      },
+    const existing = await this.membershipRepo.findOne({
+      where: [
+        { circleId, status: PENDING_OR_ACTIVE, invitedEmail: email },
+        ...(userId ? [{ circleId, status: PENDING_OR_ACTIVE, userId }] : []),
+      ],
     });
     if (existing) {
       throw new ConflictException(
@@ -398,8 +376,8 @@ export class MembersService {
     circleId: string,
     membershipId: string,
     status: 'REQUESTED' | 'INVITED',
-  ) {
-    const membership = await this.prisma.membership.findUnique({
+  ): Promise<Membership> {
+    const membership = await this.membershipRepo.findOne({
       where: { id: membershipId },
     });
     if (
@@ -415,9 +393,9 @@ export class MembersService {
   private async circleMemberEmails(
     circleId: string,
   ): Promise<Map<string, string | null>> {
-    const rows = await this.prisma.membership.findMany({
+    const rows = await this.membershipRepo.find({
       where: { circleId },
-      select: { id: true, user: { select: { email: true } } },
+      relations: { user: true },
     });
     return new Map(rows.map((r) => [r.id, r.user?.email ?? null]));
   }

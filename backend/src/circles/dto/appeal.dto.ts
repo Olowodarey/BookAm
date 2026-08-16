@@ -6,7 +6,7 @@ import {
   MaxLength,
   MinLength,
 } from 'class-validator';
-import { VoteValue } from '@prisma/client';
+import { VoteValue } from '../../entities';
 
 export class CreateAppealDto {
   /** Why the member wants to collect next — visible to the whole circle. */

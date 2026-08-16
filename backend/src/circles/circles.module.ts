@@ -1,4 +1,17 @@
 import { Module } from '@nestjs/common';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import {
+  Appeal,
+  AppealVote,
+  Circle,
+  Contribution,
+  ContributionReceipt,
+  Cycle,
+  Membership,
+  Payout,
+  PayoutReceipt,
+  User,
+} from '../entities';
 import { AuthModule } from '../auth/auth.module';
 import { CirclesController } from './circles.controller';
 import { InviteController } from './invite.controller';
@@ -10,7 +23,21 @@ import { AppealsService } from './appeals.service';
 import { ReceiptStorageService } from './receipt-storage.service';
 
 @Module({
-  imports: [AuthModule],
+  imports: [
+    TypeOrmModule.forFeature([
+      Circle,
+      Membership,
+      Cycle,
+      Contribution,
+      ContributionReceipt,
+      Payout,
+      PayoutReceipt,
+      Appeal,
+      AppealVote,
+      User,
+    ]),
+    AuthModule,
+  ],
   controllers: [CirclesController, InviteController],
   providers: [
     CirclesService,

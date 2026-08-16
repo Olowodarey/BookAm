@@ -4,8 +4,8 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import type { User } from '@prisma/client';
-import { PrismaService } from '../prisma/prisma.service';
+import { Repository } from 'typeorm';
+import { User } from '../entities';
 import { JwtAuthGuard, AuthenticatedRequest } from './jwt-auth.guard';
 
 function makeUser(overrides: Partial<User> = {}): User {
@@ -47,14 +47,14 @@ function makeContext(authHeader?: string): {
 describe('JwtAuthGuard', () => {
   let guard: JwtAuthGuard;
   let jwt: { verifyAsync: jest.Mock };
-  let prisma: { user: { findUnique: jest.Mock } };
+  let users: { findOne: jest.Mock };
 
   beforeEach(() => {
     jwt = { verifyAsync: jest.fn() };
-    prisma = { user: { findUnique: jest.fn() } };
+    users = { findOne: jest.fn() };
     guard = new JwtAuthGuard(
       jwt as unknown as JwtService,
-      prisma as unknown as PrismaService,
+      users as unknown as Repository<User>,
     );
   });
 
@@ -86,7 +86,7 @@ describe('JwtAuthGuard', () => {
       phone: '',
       role: 'MEMBER',
     });
-    prisma.user.findUnique.mockResolvedValue(null);
+    users.findOne.mockResolvedValue(null);
     const { context } = makeContext('Bearer good.token');
     await expect(guard.canActivate(context)).rejects.toBeInstanceOf(
       UnauthorizedException,
@@ -99,7 +99,7 @@ describe('JwtAuthGuard', () => {
       phone: '+2348010000000',
       role: 'MEMBER',
     });
-    prisma.user.findUnique.mockResolvedValue(makeUser({ status: 'SUSPENDED' }));
+    users.findOne.mockResolvedValue(makeUser({ status: 'SUSPENDED' }));
     const { context } = makeContext('Bearer good.token');
     await expect(guard.canActivate(context)).rejects.toBeInstanceOf(
       ForbiddenException,
@@ -112,7 +112,7 @@ describe('JwtAuthGuard', () => {
       phone: '+2348010000000',
       role: 'ADMIN',
     });
-    prisma.user.findUnique.mockResolvedValue(
+    users.findOne.mockResolvedValue(
       makeUser({ role: 'ADMIN', passwordHash: 'secret' }),
     );
     const { context, request } = makeContext('Bearer good.token');
@@ -128,7 +128,7 @@ describe('JwtAuthGuard', () => {
       phone: '+2348010000000',
       role: 'MEMBER', // stale claim in the token
     });
-    prisma.user.findUnique.mockResolvedValue(makeUser({ role: 'COORDINATOR' }));
+    users.findOne.mockResolvedValue(makeUser({ role: 'COORDINATOR' }));
     const { context, request } = makeContext('Bearer good.token');
 
     await guard.canActivate(context);

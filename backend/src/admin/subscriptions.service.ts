@@ -1,9 +1,10 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma, SubscriptionStatus } from '@prisma/client';
-import { PrismaService } from '../prisma/prisma.service';
+import { InjectRepository } from '@nestjs/typeorm';
+import { FindOptionsWhere, Repository } from 'typeorm';
+import { Subscription, SubscriptionStatus } from '../entities';
+import { toSafeUser } from '../auth/auth.service';
 import type { Paginated, SubscriptionWithRelations } from './admin.types';
 import type { ListSubscriptionsDto } from './dto/query.dto';
-import { safeUserSelect } from './safe-user.select';
 
 // TODO: Paystack — when charge collection is integrated, subscriptions will be
 // created/renewed from verified Paystack transactions (webhook → create record,
@@ -11,49 +12,54 @@ import { safeUserSelect } from './safe-user.select';
 // SaaS fees settle in BookAm's own Paystack account and NEVER touch members'
 // ajo contributions.
 
-const withRelations = {
-  user: { select: safeUserSelect },
-  plan: true,
-} satisfies Prisma.SubscriptionInclude;
+/** Loads the user + plan and strips the user down to a SafeUser (no passwordHash). */
+function toWithRelations(s: Subscription): SubscriptionWithRelations {
+  const { user, plan, ...rest } = s;
+  return { ...rest, user: toSafeUser(user), plan };
+}
 
 @Injectable()
 export class SubscriptionsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    @InjectRepository(Subscription)
+    private readonly subscriptions: Repository<Subscription>,
+  ) {}
 
   async list(
     query: ListSubscriptionsDto,
   ): Promise<Paginated<SubscriptionWithRelations>> {
-    const where: Prisma.SubscriptionWhereInput = query.status
+    const where: FindOptionsWhere<Subscription> = query.status
       ? { status: query.status }
       : {};
 
-    const [items, total] = await this.prisma.$transaction([
-      this.prisma.subscription.findMany({
-        where,
-        include: withRelations,
-        orderBy: { createdAt: 'desc' },
-        skip: (query.page - 1) * query.pageSize,
-        take: query.pageSize,
-      }),
-      this.prisma.subscription.count({ where }),
-    ]);
+    const [items, total] = await this.subscriptions.findAndCount({
+      where,
+      relations: { user: true, plan: true },
+      order: { createdAt: 'DESC' },
+      skip: (query.page - 1) * query.pageSize,
+      take: query.pageSize,
+    });
 
-    return { items, total, page: query.page, pageSize: query.pageSize };
+    return {
+      items: items.map(toWithRelations),
+      total,
+      page: query.page,
+      pageSize: query.pageSize,
+    };
   }
 
   async updateStatus(
     id: string,
     status: SubscriptionStatus,
   ): Promise<SubscriptionWithRelations> {
-    const existing = await this.prisma.subscription.findUnique({
+    const existing = await this.subscriptions.findOne({
       where: { id },
+      relations: { user: true, plan: true },
     });
     if (!existing) throw new NotFoundException('Subscription not found');
 
-    return this.prisma.subscription.update({
-      where: { id },
-      data: { status },
-      include: withRelations,
-    });
+    existing.status = status;
+    await this.subscriptions.save(existing);
+    return toWithRelations(existing);
   }
 }

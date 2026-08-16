@@ -4,28 +4,17 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import type {
-  Appeal,
-  AppealVote,
-  Membership,
-  User,
-  VoteValue,
-} from '@prisma/client';
-import { PrismaService } from '../prisma/prisma.service';
+import { InjectRepository } from '@nestjs/typeorm';
+import { FindOptionsRelations, Repository } from 'typeorm';
+import { Appeal, AppealVote, Circle, Membership, VoteValue } from '../entities';
 import { CirclesService } from './circles.service';
 import type { AppealInfo } from './circles.types';
 
-type AppealWithRelations = Appeal & {
-  appellant: Membership;
-  decidedBy: User | null;
-  votes: AppealVote[];
-};
-
-const APPEAL_INCLUDE = {
+const appealRelations: FindOptionsRelations<Appeal> = {
   appellant: true,
   decidedBy: true,
   votes: true,
-} as const;
+};
 
 /**
  * "Consider me to collect next" appeals. Members create, withdraw and vote
@@ -36,7 +25,12 @@ const APPEAL_INCLUDE = {
 @Injectable()
 export class AppealsService {
   constructor(
-    private readonly prisma: PrismaService,
+    @InjectRepository(Appeal) private readonly appeals: Repository<Appeal>,
+    @InjectRepository(AppealVote)
+    private readonly votes: Repository<AppealVote>,
+    @InjectRepository(Membership)
+    private readonly memberships: Repository<Membership>,
+    @InjectRepository(Circle) private readonly circleRepo: Repository<Circle>,
     private readonly circles: CirclesService,
   ) {}
 
@@ -48,10 +42,10 @@ export class AppealsService {
     circleId: string,
     viewerMembershipId: string | null,
   ): Promise<AppealInfo[]> {
-    const appeals = await this.prisma.appeal.findMany({
+    const appeals = await this.appeals.find({
       where: { circleId },
-      include: APPEAL_INCLUDE,
-      orderBy: { createdAt: 'desc' },
+      relations: appealRelations,
+      order: { createdAt: 'DESC' },
     });
     return appeals.map((a) => this.toInfo(a, viewerMembershipId));
   }
@@ -68,7 +62,7 @@ export class AppealsService {
         'You have already collected in this circle, so the queue moves on to others',
       );
     }
-    const open = await this.prisma.appeal.findFirst({
+    const open = await this.appeals.findOne({
       where: { circleId, appellantId: membership.id, status: 'OPEN' },
     });
     if (open) {
@@ -76,11 +70,10 @@ export class AppealsService {
         'You already have an open appeal in this circle',
       );
     }
-    const appeal = await this.prisma.appeal.create({
-      data: { circleId, appellantId: membership.id, reason },
-      include: APPEAL_INCLUDE,
-    });
-    return this.toInfo(appeal, membership.id);
+    const created = await this.appeals.save(
+      this.appeals.create({ circleId, appellantId: membership.id, reason }),
+    );
+    return this.toInfo(await this.reload(created.id), membership.id);
   }
 
   /** Member action: withdraw my own appeal while it is still open. */
@@ -92,12 +85,11 @@ export class AppealsService {
     if (appeal.appellantId !== membership.id) {
       throw new NotFoundException('Appeal not found');
     }
-    const updated = await this.prisma.appeal.update({
-      where: { id: appealId },
-      data: { status: 'WITHDRAWN', decidedAt: new Date() },
-      include: APPEAL_INCLUDE,
+    await this.appeals.update(appealId, {
+      status: 'WITHDRAWN',
+      decidedAt: new Date(),
     });
-    return this.toInfo(updated, membership.id);
+    return this.toInfo(await this.reload(appealId), membership.id);
   }
 
   /**
@@ -114,16 +106,18 @@ export class AppealsService {
     if (appeal.appellantId === membership.id) {
       throw new BadRequestException('You cannot vote on your own appeal');
     }
-    await this.prisma.appealVote.upsert({
-      where: { appealId_voterId: { appealId, voterId: membership.id } },
-      create: { appealId, voterId: membership.id, value },
-      update: { value },
+    const existing = await this.votes.findOne({
+      where: { appealId, voterId: membership.id },
     });
-    const updated = await this.prisma.appeal.findUniqueOrThrow({
-      where: { id: appealId },
-      include: APPEAL_INCLUDE,
-    });
-    return this.toInfo(updated, membership.id);
+    if (existing) {
+      existing.value = value;
+      await this.votes.save(existing);
+    } else {
+      await this.votes.save(
+        this.votes.create({ appealId, voterId: membership.id, value }),
+      );
+    }
+    return this.toInfo(await this.reload(appealId), membership.id);
   }
 
   /**
@@ -142,7 +136,7 @@ export class AppealsService {
     const appeal = await this.openAppealInCircle(appealId, circleId);
 
     if (approve) {
-      const appellant = await this.prisma.membership.findUnique({
+      const appellant = await this.memberships.findOne({
         where: { id: appeal.appellantId },
       });
       if (!appellant || appellant.status !== 'ACTIVE') {
@@ -159,17 +153,13 @@ export class AppealsService {
       await this.moveNextInRotation(circle.id, appellant.id);
     }
 
-    const updated = await this.prisma.appeal.update({
-      where: { id: appealId },
-      data: {
-        status: approve ? 'APPROVED' : 'REJECTED',
-        decidedById: coordinatorId,
-        decidedAt: new Date(),
-        outcomeNote: outcomeNote ?? null,
-      },
-      include: APPEAL_INCLUDE,
+    await this.appeals.update(appealId, {
+      status: approve ? 'APPROVED' : 'REJECTED',
+      decidedById: coordinatorId,
+      decidedAt: new Date(),
+      outcomeNote: outcomeNote ?? null,
     });
-    return this.toInfo(updated, null);
+    return this.toInfo(await this.reload(appealId), null);
   }
 
   /**
@@ -181,9 +171,7 @@ export class AppealsService {
     circleId: string,
     membershipId: string,
   ): Promise<void> {
-    const circle = await this.prisma.circle.findUniqueOrThrow({
-      where: { id: circleId },
-    });
+    const circle = await this.circleRepo.findOneByOrFail({ id: circleId });
     const state = await this.circles.openCycleState(circle);
     const members =
       state?.members ?? (await this.circles.activeMembers(circleId));
@@ -208,12 +196,9 @@ export class AppealsService {
     }
     rest.splice(insertAt, 0, appellant);
 
-    await this.prisma.$transaction(
+    await Promise.all(
       rest.map((m, index) =>
-        this.prisma.membership.update({
-          where: { id: m.id },
-          data: { position: index + 1 },
-        }),
+        this.memberships.update(m.id, { position: index + 1 }),
       ),
     );
   }
@@ -222,9 +207,7 @@ export class AppealsService {
     appealId: string,
     circleId: string,
   ): Promise<Appeal> {
-    const appeal = await this.prisma.appeal.findUnique({
-      where: { id: appealId },
-    });
+    const appeal = await this.appeals.findOne({ where: { id: appealId } });
     if (!appeal || appeal.circleId !== circleId) {
       throw new NotFoundException('Appeal not found');
     }
@@ -234,8 +217,15 @@ export class AppealsService {
     return appeal;
   }
 
+  private reload(appealId: string): Promise<Appeal> {
+    return this.appeals.findOneOrFail({
+      where: { id: appealId },
+      relations: appealRelations,
+    });
+  }
+
   private toInfo(
-    appeal: AppealWithRelations,
+    appeal: Appeal,
     viewerMembershipId: string | null,
   ): AppealInfo {
     const myVote =
