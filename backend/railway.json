@@ -4,6 +4,7 @@
     "preDeployCommand": [
       "npx typeorm migration:run -d dist/database/data-source.js",
       "node dist/database/seed.js"
-    ]
+    ],
+    "startCommand": "node dist/main"
   }
 }
