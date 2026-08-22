@@ -27,7 +27,7 @@ import {
   inputClass,
   type BadgeTone,
 } from "@/components/admin/ui";
-import { CopyButton, CycleGrid, Stat } from "@/components/dashboard/ui";
+import { CollectionSummary, CopyButton, Stat } from "@/components/dashboard/ui";
 
 export default function CircleOverviewPage() {
   const { detail } = useCircle();
@@ -148,8 +148,7 @@ export default function CircleOverviewPage() {
               </div>
             </Card>
           ) : (
-            <CycleGrid
-              circleName={circle.name}
+            <CollectionSummary
               cycleIndex={cycle.index}
               contributions={cycle.contributions}
             />
@@ -254,7 +253,7 @@ function CircleSettingsCard() {
     <Card className="mb-6 px-5 py-4">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="font-mono text-[11px] font-bold uppercase tracking-wide text-ink/60">
+          <p className="font-mono text-[11px] font-bold uppercase tracking-wide text-green">
             Coordinator settings
           </p>
           <div className="mt-2 flex items-end gap-2">

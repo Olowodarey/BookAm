@@ -167,6 +167,93 @@ export function CycleGrid({
 }
 
 /**
+ * Compact, member-count-independent view of a round's collection: a progress
+ * bar plus a Paid / Receipt-in / Rejected / Owing breakdown. Used where the
+ * full per-member grid would grow unwieldy (e.g. the coordinator overview).
+ */
+export function CollectionSummary({
+  cycleIndex,
+  contributions,
+}: {
+  cycleIndex: number;
+  contributions: { status: ContributionStatus }[];
+}) {
+  const total = contributions.length;
+  const count = (s: ContributionStatus) =>
+    contributions.filter((c) => c.status === s).length;
+  const paid = count("PAID");
+  const pct = total > 0 ? Math.round((paid / total) * 100) : 0;
+
+  const rows = [
+    { label: "Paid", n: paid, dot: "bg-green" },
+    {
+      label: "Receipt in",
+      n: count("PENDING_REVIEW"),
+      dot: "border-2 border-gold bg-gold/15",
+    },
+    {
+      label: "Rejected",
+      n: count("REJECTED"),
+      dot: "border-2 border-red-300 bg-red-50",
+    },
+    {
+      label: "Owing",
+      n: count("AWAITING"),
+      dot: "border-2 border-dashed border-red-300 bg-red-50",
+    },
+  ];
+
+  return (
+    <div className="rounded-2xl border-2 border-green/35 bg-white p-5 shadow-[4px_4px_0_0_rgba(15,90,64,0.12)] sm:p-6">
+      <div className="flex items-center justify-between gap-3">
+        <p className="font-display text-lg font-bold">
+          Round {cycleIndex} collection
+        </p>
+        <span className="shrink-0 rounded-md border-2 border-gold bg-gold/10 px-2.5 py-1 font-mono text-[11px] font-bold uppercase tracking-wide text-green-deep">
+          {paid} / {total} paid
+        </span>
+      </div>
+
+      <div
+        className="mt-4 h-3 w-full overflow-hidden rounded-full bg-green/10"
+        role="progressbar"
+        aria-valuenow={pct}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-label="Share of members paid this round"
+      >
+        <div
+          className="h-full rounded-full bg-green transition-all"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      <p className="mt-1.5 font-mono text-xs text-muted">
+        {pct}% collected this round
+      </p>
+
+      <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {rows.map((r) => (
+          <div
+            key={r.label}
+            className="flex items-center gap-2 rounded-xl border border-line bg-white/60 px-3 py-2"
+          >
+            <span
+              className={`inline-block h-3.5 w-3.5 shrink-0 rounded-sm ${r.dot}`}
+            />
+            <span className="min-w-0">
+              <span className="font-mono text-base font-bold text-ink">
+                {r.n}
+              </span>
+              <span className="ml-1 text-xs text-muted">{r.label}</span>
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
  * Image or PDF preview of an uploaded receipt, in a dialog.
  * Receipts are shown to every member of the circle for transparency.
  * // TODO: privacy — mask sensitive details (e.g. bank account numbers) on
