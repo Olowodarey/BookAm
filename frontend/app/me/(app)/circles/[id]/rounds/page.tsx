@@ -125,7 +125,7 @@ function RoundCard({
 
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <p className="font-mono text-[10px] font-bold uppercase tracking-wide text-muted">
+            <p className="font-mono text-[10px] font-bold uppercase tracking-wide text-green">
               Collected by
             </p>
             {round.status === "OPEN" ? (
@@ -134,15 +134,17 @@ function RoundCard({
               <Badge tone="green">Completed</Badge>
             )}
           </div>
-          <p className="truncate font-display text-base font-bold text-ink">
-            {collector}
+          <div className="flex items-center gap-2">
+            <p className="truncate font-display text-base font-bold text-ink">
+              {collector}
+            </p>
             {round.collectorPosition ? (
-              <span className="ml-1.5 font-mono text-xs font-normal text-muted">
-                position {round.collectorPosition}
+              <span className="shrink-0 rounded-full bg-green/10 px-2 py-0.5 font-mono text-[11px] font-bold text-green">
+                Pos {round.collectorPosition}
               </span>
             ) : null}
-          </p>
-          <p className="mt-0.5 text-xs text-muted">
+          </div>
+          <p className="mt-0.5 text-xs text-ink/70">
             {round.dueAt
               ? `Due ${formatDeadline(round.dueAt)} (WAT)`
               : `Started ${formatDate(round.startedAt)}`}
@@ -154,8 +156,8 @@ function RoundCard({
           <p className="font-mono text-base font-bold text-ink">
             {formatNaira(round.potNaira)}
           </p>
-          <p className="text-xs text-muted">
-            <span className="text-green">{round.paidCount}</span>/
+          <p className="text-xs font-medium text-ink/70">
+            <span className="font-bold text-green">{round.paidCount}</span>/
             {round.memberCount} paid
           </p>
         </div>

@@ -18,7 +18,6 @@ import {
 } from "@/components/admin/ui";
 import {
   ContributionBadge,
-  CycleGrid,
   ReceiptFileButton,
   Stat,
 } from "@/components/dashboard/ui";
@@ -99,17 +98,6 @@ export default function MemberCircleOverviewPage() {
               }
             />
           </div>
-
-          <CycleGrid
-            circleName={detail.circleName}
-            cycleIndex={detail.cycleIndex}
-            contributions={detail.members.map((m) => ({
-              id: m.membershipId,
-              memberName: m.name,
-              position: m.position,
-              status: m.status ?? "AWAITING",
-            }))}
-          />
 
           <CircleReceipts />
         </>
