@@ -219,18 +219,20 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
         <div className="flex min-w-0 flex-1 flex-col md:pl-60">
           <header className="sticky top-0 z-30 border-b border-line bg-paper/80 backdrop-blur-md">
             <div className="flex items-center justify-between gap-3 px-4 py-3 sm:px-6">
-              <div className="flex items-center gap-2.5 md:hidden">
+              <div className="flex min-w-0 items-center gap-2.5 md:hidden">
                 <LogoMark />
-                <span className="font-display text-base font-bold">
+                <span className="truncate font-display text-base font-bold">
                   {activeCircle ? activeCircle.name : "BookAm"}
                 </span>
               </div>
-              <div className="hidden text-sm text-muted md:block">
+              <div className="hidden min-w-0 truncate text-sm text-muted md:block">
                 Signed in as{" "}
                 <span className="font-semibold text-ink">{user.name}</span>
               </div>
-              <div className="flex items-center gap-3">
-                <span className="font-mono text-xs text-muted">{user.email}</span>
+              <div className="flex shrink-0 items-center gap-3">
+                <span className="hidden font-mono text-xs text-muted sm:inline">
+                  {user.email}
+                </span>
                 <button
                   onClick={signOut}
                   className="rounded-xl border border-green/30 bg-white/70 px-3.5 py-1.5 text-sm font-semibold text-green transition-colors hover:bg-green hover:text-paper"
