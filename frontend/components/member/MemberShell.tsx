@@ -205,22 +205,37 @@ export default function MemberShell({ children }: { children: ReactNode }) {
                 Sign out
               </button>
             </div>
-            {/* Mobile nav — big tap targets, scrollable with edge hints */}
+            {/* Mobile nav — context-aware: inside a circle we show only that
+                circle's tabs (plus a way back), so contributors aren't always
+                staring at account-level links. Outside, the account tabs. */}
             <MobileTabNav ariaLabel="Sections" activeKey={pathname}>
-              {navLink("/me", "My circles", pathname === "/me", true)}
-              {navLink("/me/settings", "Settings", pathname === "/me/settings", true)}
-              {user.role === "MEMBER"
-                ? navLink(
-                    "/me/become-collector",
-                    "Become a collector",
-                    pathname === "/me/become-collector",
+              {activeCircleId ? (
+                <>
+                  {navLink("/me", "← My circles", false, true)}
+                  {circleLinks(true)}
+                </>
+              ) : (
+                <>
+                  {navLink("/me", "My circles", pathname === "/me", true)}
+                  {navLink(
+                    "/me/settings",
+                    "Settings",
+                    pathname === "/me/settings",
                     true,
-                  )
-                : null}
-              {user.role === "COORDINATOR"
-                ? navLink("/dashboard", "Circles I run ↗", false, true)
-                : null}
-              {circleLinks(true)}
+                  )}
+                  {user.role === "MEMBER"
+                    ? navLink(
+                        "/me/become-collector",
+                        "Become a collector",
+                        pathname === "/me/become-collector",
+                        true,
+                      )
+                    : null}
+                  {user.role === "COORDINATOR"
+                    ? navLink("/dashboard", "Circles I run ↗", false, true)
+                    : null}
+                </>
+              )}
             </MobileTabNav>
           </header>
           <main className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-8">

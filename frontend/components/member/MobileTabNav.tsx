@@ -105,7 +105,7 @@ export function MobileTabNav({
   }, [activeKey, centerActive, updateNav]);
 
   return (
-    <div className="relative border-t border-t-line border-b-2 border-b-green md:hidden">
+    <div className="relative border-y-2 border-y-green md:hidden">
       <nav
         ref={scrollerRef}
         aria-label={ariaLabel}

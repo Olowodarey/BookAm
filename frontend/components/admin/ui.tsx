@@ -247,10 +247,12 @@ export function PageHeader({
   return (
     <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
       <div>
-        <h1 className="font-display text-2xl font-bold tracking-tight">
+        <h1 className="font-display text-2xl font-bold tracking-tight text-green">
           {title}
         </h1>
-        {subtitle ? <p className="mt-1 text-sm text-muted">{subtitle}</p> : null}
+        {subtitle ? (
+          <p className="mt-1 text-sm font-medium text-ink/75">{subtitle}</p>
+        ) : null}
       </div>
       {action}
     </div>
