@@ -34,8 +34,13 @@ export default function MemberCircleMembersPage() {
                   member.isMe ? "bg-gold/10" : ""
                 }`}
               >
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-green/10 font-mono text-sm font-bold text-green">
-                  {member.position}
+                <span className="flex h-10 w-10 shrink-0 flex-col items-center justify-center rounded-lg border border-green/25 bg-green/10 font-mono text-green">
+                  <span className="text-[8px] font-bold uppercase leading-none tracking-wide">
+                    Pos
+                  </span>
+                  <span className="text-sm font-bold leading-none">
+                    {member.position}
+                  </span>
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-semibold">
@@ -48,6 +53,9 @@ export default function MemberCircleMembersPage() {
                         <Badge tone="gold">Collected</Badge>
                       </span>
                     ) : null}
+                  </p>
+                  <p className="mt-0.5 font-mono text-[11px] text-muted">
+                    Position {member.position} · payout order
                   </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
