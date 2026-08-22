@@ -14,6 +14,7 @@ import { adminApi, setToken, ApiError } from "@/lib/admin/api";
 import { clearSession } from "@/lib/auth/api";
 import type { SafeUser } from "@/lib/admin/types";
 import { Spinner } from "./ui";
+import { SupportContactFooter } from "@/components/support/SupportContact";
 
 const AdminUserContext = createContext<SafeUser | null>(null);
 
@@ -196,6 +197,7 @@ export default function AdminShell({ children }: { children: ReactNode }) {
           <main className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-8">
             {children}
           </main>
+          <SupportContactFooter load={adminApi.getSettings} />
         </div>
       </div>
     </AdminUserContext.Provider>
