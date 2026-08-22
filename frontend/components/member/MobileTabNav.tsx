@@ -57,6 +57,18 @@ export function MobileTabNav({
     );
   }, []);
 
+  // Scroll so the active tab sits in the middle of the bar. scrollTo clamps
+  // at the ends, so the first/last tabs go as centered as they can.
+  const centerActive = useCallback(() => {
+    const el = scrollerRef.current;
+    const active = el?.querySelector<HTMLElement>('[aria-current="page"]');
+    if (!el || !active) return;
+    const elRect = el.getBoundingClientRect();
+    const aRect = active.getBoundingClientRect();
+    const delta = aRect.left - elRect.left - (el.clientWidth - aRect.width) / 2;
+    el.scrollTo({ left: el.scrollLeft + delta, behavior: "smooth" });
+  }, []);
+
   // Navigate to the tab before/after the active one. Clicking the <a> lets
   // Next.js handle the client-side navigation.
   const goToAdjacent = (dir: 1 | -1) => {
@@ -80,18 +92,17 @@ export function MobileTabNav({
     return () => observer.disconnect();
   }, [updateNav]);
 
-  // Bring the active tab into view on navigation and re-evaluate the arrows
-  // once the scroll settles.
+  // Center the active tab on navigation (and on first mount) and re-evaluate
+  // the arrows once the scroll settles. A rAF ensures the new active tab has
+  // its aria-current applied and the bar is laid out before we measure.
   useEffect(() => {
-    const active = scrollerRef.current?.querySelector('[aria-current="page"]');
-    active?.scrollIntoView({
-      inline: "center",
-      block: "nearest",
-      behavior: "smooth",
-    });
-    const timer = window.setTimeout(updateNav, 300);
-    return () => window.clearTimeout(timer);
-  }, [activeKey, updateNav]);
+    const raf = requestAnimationFrame(centerActive);
+    const timer = window.setTimeout(updateNav, 350);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.clearTimeout(timer);
+    };
+  }, [activeKey, centerActive, updateNav]);
 
   return (
     <div className="relative border-t border-t-line border-b-2 border-b-green md:hidden">
