@@ -186,7 +186,7 @@ export default function MemberShell({ children }: { children: ReactNode }) {
 
         {/* Main */}
         <div className="flex min-w-0 flex-1 flex-col md:pl-60">
-          <header className="sticky top-0 z-30 border-b border-line bg-paper/80 backdrop-blur-md">
+          <header className="sticky top-0 z-30 border-line bg-paper/80 backdrop-blur-md md:border-b">
             <div className="flex items-center justify-between gap-3 px-4 py-3 sm:px-6">
               <div className="flex items-center gap-2.5 md:hidden">
                 <LogoMark />
