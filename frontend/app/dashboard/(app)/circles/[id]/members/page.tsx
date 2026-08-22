@@ -138,8 +138,13 @@ export default function MembersPage() {
                 >
                   ⠿
                 </span>
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-green/10 font-mono text-sm font-bold text-green">
-                  {index + 1}
+                <span className="flex h-10 w-10 shrink-0 flex-col items-center justify-center rounded-lg border border-green/25 bg-green/10 font-mono text-green">
+                  <span className="text-[8px] font-bold uppercase leading-none tracking-wide">
+                    Pos
+                  </span>
+                  <span className="text-sm font-bold leading-none">
+                    {index + 1}
+                  </span>
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-semibold">
@@ -149,6 +154,9 @@ export default function MembersPage() {
                         <Badge tone="gold">Collected</Badge>
                       </span>
                     ) : null}
+                  </p>
+                  <p className="font-mono text-[11px] text-muted">
+                    Position {index + 1} · payout order
                   </p>
                   <p className="truncate font-mono text-xs text-muted">
                     {member.email ?? member.phone ?? ""}
