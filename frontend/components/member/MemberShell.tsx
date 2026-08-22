@@ -16,6 +16,7 @@ import { clearSession } from "@/lib/auth/api";
 import type { MyCircleCard, SafeUser } from "@/lib/member/types";
 import { Spinner } from "@/components/admin/ui";
 import { SupportContactFooter } from "@/components/support/SupportContact";
+import { MobileTabNav } from "@/components/member/MobileTabNav";
 
 interface MemberContextValue {
   user: SafeUser;
@@ -204,11 +205,8 @@ export default function MemberShell({ children }: { children: ReactNode }) {
                 Sign out
               </button>
             </div>
-            {/* Mobile nav — big tap targets */}
-            <nav
-              aria-label="Sections"
-              className="flex gap-1 overflow-x-auto border-t border-line px-2 py-1.5 md:hidden"
-            >
+            {/* Mobile nav — big tap targets, scrollable with edge hints */}
+            <MobileTabNav ariaLabel="Sections" activeKey={pathname}>
               {navLink("/me", "My circles", pathname === "/me", true)}
               {navLink("/me/settings", "Settings", pathname === "/me/settings", true)}
               {user.role === "MEMBER"
@@ -223,7 +221,7 @@ export default function MemberShell({ children }: { children: ReactNode }) {
                 ? navLink("/dashboard", "Circles I run ↗", false, true)
                 : null}
               {circleLinks(true)}
-            </nav>
+            </MobileTabNav>
           </header>
           <main className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-8">
             {children}
