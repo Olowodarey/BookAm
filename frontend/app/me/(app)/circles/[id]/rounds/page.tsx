@@ -102,10 +102,10 @@ function RoundCard({
 
   return (
     <Card
-      className={`overflow-hidden border-2 border-ink bg-white p-0 transition-shadow ${
+      className={`overflow-hidden border-2 bg-white p-0 transition-all ${
         open
-          ? "shadow-[6px_6px_0_0_rgba(15,90,64,0.16)]"
-          : "shadow-[4px_4px_0_0_rgba(15,90,64,0.10)]"
+          ? "border-green shadow-[6px_6px_0_0_rgba(15,90,64,0.22)]"
+          : "border-green/35 shadow-[4px_4px_0_0_rgba(15,90,64,0.12)]"
       }`}
     >
       <button
@@ -160,22 +160,26 @@ function RoundCard({
           </p>
         </div>
 
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={2.5}
-          className={`h-4 w-4 shrink-0 text-muted transition-transform ${
-            open ? "rotate-180" : ""
+        <span
+          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-colors ${
+            open ? "bg-green text-paper" : "bg-green/10 text-green"
           }`}
-          aria-hidden="true"
         >
-          <path strokeLinecap="round" strokeLinejoin="round" d="M6 9l6 6 6-6" />
-        </svg>
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2.75}
+            className={`h-5 w-5 transition-transform ${open ? "rotate-180" : ""}`}
+            aria-hidden="true"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 9l6 6 6-6" />
+          </svg>
+        </span>
       </button>
 
       {open ? (
-        <div className="border-t-2 border-ink/15 bg-paper/40 px-4 py-3 sm:px-5">
+        <div className="border-t-2 border-green/25 bg-green/[0.03] px-4 py-3 sm:px-5">
           <p className="mb-2 font-mono text-[10px] font-bold uppercase tracking-wide text-ink/60">
             What everyone paid this round
           </p>
