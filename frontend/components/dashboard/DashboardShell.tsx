@@ -233,7 +233,7 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
                 <span className="font-mono text-xs text-muted">{user.email}</span>
                 <button
                   onClick={signOut}
-                  className="rounded-xl border border-line px-3 py-1.5 text-sm font-semibold text-ink/70 transition-colors hover:border-green hover:text-green"
+                  className="rounded-xl border border-green/30 bg-white/70 px-3.5 py-1.5 text-sm font-semibold text-green transition-colors hover:bg-green hover:text-paper"
                 >
                   Sign out
                 </button>

@@ -14,7 +14,8 @@ export const CONTRIBUTION_LABEL: Record<ContributionStatus, string> = {
 };
 
 const CONTRIBUTION_TONE: Record<ContributionStatus, BadgeTone> = {
-  AWAITING: "muted",
+  // Owing is the member's outstanding to-do — flag it red so it can't be missed.
+  AWAITING: "red",
   PENDING_REVIEW: "gold",
   PAID: "green",
   REJECTED: "red",
@@ -124,7 +125,7 @@ export function CycleGrid({
                     ? "border-2 border-gold bg-gold/15 text-green-deep"
                     : c.status === "REJECTED"
                       ? "border-2 border-red-300 bg-red-50 text-red-500"
-                      : "border-2 border-dashed border-line font-mono text-sm text-muted"
+                      : "border-2 border-dashed border-red-300 bg-red-50 font-mono text-sm font-bold text-red-600"
               }`}
             >
               {c.status === "PAID" ? (
@@ -157,7 +158,7 @@ export function CycleGrid({
           Rejected
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="inline-block h-3 w-3 rounded-sm border-2 border-dashed border-line" />{" "}
+          <span className="inline-block h-3 w-3 rounded-sm border-2 border-dashed border-red-300 bg-red-50" />{" "}
           Owing
         </span>
       </div>
@@ -248,8 +249,9 @@ export function ReceiptFileButton({
         type="button"
         disabled={busy}
         onClick={() => inputRef.current?.click()}
-        className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-line bg-white/60 px-3.5 py-2 text-sm font-semibold text-ink transition-colors hover:border-green hover:text-green disabled:cursor-not-allowed disabled:opacity-50"
+        className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-green px-3.5 py-2 text-sm font-semibold text-paper shadow-sm transition-colors hover:bg-green-deep disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-green"
       >
+        <span aria-hidden>⬆</span>
         {busy ? busyLabel : label}
       </button>
     </>
@@ -267,8 +269,8 @@ export function Stat({
   hint?: string;
 }) {
   return (
-    <div className="rounded-2xl border border-line bg-white/60 px-4 py-3">
-      <p className="font-mono text-[11px] font-bold uppercase tracking-wide text-ink/60">
+    <div className="rounded-2xl border border-green/15 bg-green/[0.05] px-4 py-3 transition-colors hover:border-green/30">
+      <p className="font-mono text-[11px] font-bold uppercase tracking-wide text-green">
         {label}
       </p>
       <p className="mt-1 font-mono text-xl font-bold text-ink">{value}</p>
