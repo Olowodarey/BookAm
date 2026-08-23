@@ -3,17 +3,18 @@ import * as nodemailer from 'nodemailer';
 import type { Transporter } from 'nodemailer';
 
 /**
- * Sends transactional email (verification codes, password resets) over Gmail
- * SMTP — free for low volume, no paid provider needed.
+ * Sends transactional email (verification codes, password resets). Delivery is
+ * chosen at runtime, best option first:
  *
- * Configure with a Gmail account and an App Password (Google account →
- * Security → 2-Step Verification → App passwords):
- *   GMAIL_USER=you@gmail.com
- *   GMAIL_APP_PASSWORD=xxxxxxxxxxxxxxxx
- *   MAIL_FROM="BookAm <you@gmail.com>"   # optional, defaults to GMAIL_USER
- *
- * With no credentials set, mail is logged to the console instead of sent, so
- * the whole flow is testable in dev without an inbox.
+ *   1. Resend HTTP API (RESEND_API_KEY) — sends over HTTPS, so it works even
+ *      where outbound SMTP is blocked (e.g. Railway). This is production.
+ *        RESEND_API_KEY=re_xxx
+ *        MAIL_FROM="BookAm <no-reply@bookam.xyz>"   # must be a Resend-verified
+ *                                                     domain (gmail.com won't do)
+ *   2. Gmail SMTP (GMAIL_USER + GMAIL_APP_PASSWORD) — handy locally; blocked on
+ *      Railway, so not used in production there.
+ *   3. No config → mail is logged to the console, so the flow is testable in
+ *      dev without an inbox (the OTP is also returned as devCode outside prod).
  */
 @Injectable()
 export class EmailService {
@@ -51,13 +52,41 @@ export class EmailService {
   }
 
   async send(to: string, subject: string, text: string): Promise<void> {
-    const transporter = this.getTransporter();
-    if (!transporter) {
-      // Dev fallback: no SMTP configured, so surface the mail in the logs.
-      this.logger.log(`[email:dev] To ${to} — ${subject}\n${text}`);
+    // 1. Resend over HTTPS — the production path (Railway blocks SMTP egress).
+    const resendKey = process.env.RESEND_API_KEY;
+    if (resendKey) {
+      await this.sendViaResend(resendKey, to, subject, text);
       return;
     }
-    await transporter.sendMail({ from: this.from, to, subject, text });
+    // 2. Gmail SMTP — works locally.
+    const transporter = this.getTransporter();
+    if (transporter) {
+      await transporter.sendMail({ from: this.from, to, subject, text });
+      return;
+    }
+    // 3. Dev fallback: nothing configured, so surface the mail in the logs.
+    this.logger.log(`[email:dev] To ${to} — ${subject}\n${text}`);
+  }
+
+  /** Sends via Resend's REST API — no SDK, just an HTTPS POST. */
+  private async sendViaResend(
+    apiKey: string,
+    to: string,
+    subject: string,
+    text: string,
+  ): Promise<void> {
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ from: this.from, to, subject, text }),
+    });
+    if (!res.ok) {
+      const detail = await res.text().catch(() => '');
+      throw new Error(`Resend send failed (${res.status}): ${detail}`);
+    }
   }
 
   /**
