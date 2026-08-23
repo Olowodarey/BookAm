@@ -16,6 +16,7 @@ import { clearSession } from "@/lib/auth/api";
 import type { CircleSummary, SafeUser } from "@/lib/dashboard/types";
 import { Spinner } from "@/components/admin/ui";
 import { SupportContactFooter } from "@/components/support/SupportContact";
+import { MobileTabNav } from "@/components/member/MobileTabNav";
 
 interface DashboardContextValue {
   user: SafeUser;
@@ -109,37 +110,43 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
     router.push(`/dashboard/circles/${id}${segment}`);
   };
 
+  // Shared link renderer so the sidebar (desktop) and the tab bar (mobile)
+  // stay visually in step — mirrors the contributor shell's navbar.
+  const navLink = (
+    href: string,
+    label: string,
+    active: boolean,
+    mobile: boolean,
+  ) => (
+    <Link
+      key={href}
+      href={href}
+      aria-current={active ? "page" : undefined}
+      className={
+        mobile
+          ? `whitespace-nowrap rounded-lg px-3.5 py-2 text-sm font-medium ${
+              active ? "bg-green text-paper" : "text-ink/70 hover:bg-ink/5"
+            }`
+          : `flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
+              active
+                ? "bg-paper/10 text-gold"
+                : "text-paper/70 hover:bg-paper/5 hover:text-paper"
+            }`
+      }
+    >
+      {label}
+    </Link>
+  );
+
   const circleNav = (mobile: boolean) =>
-    activeCircleId ? (
-      <>
-        {CIRCLE_NAV.map((item) => {
+    activeCircleId
+      ? CIRCLE_NAV.map((item) => {
           const href = `/dashboard/circles/${activeCircleId}${
             item.segment ? `/${item.segment}` : ""
           }`;
-          const active = pathname === href;
-          return (
-            <Link
-              key={item.segment}
-              href={href}
-              aria-current={active ? "page" : undefined}
-              className={
-                mobile
-                  ? `whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium ${
-                      active ? "bg-green text-paper" : "text-ink/70 hover:bg-ink/5"
-                    }`
-                  : `flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-colors ${
-                      active
-                        ? "bg-paper/10 text-gold"
-                        : "text-paper/70 hover:bg-paper/5 hover:text-paper"
-                    }`
-              }
-            >
-              {item.label}
-            </Link>
-          );
-        })}
-      </>
-    ) : null;
+          return navLink(href, item.label, pathname === href, mobile);
+        })
+      : null;
 
   return (
     <DashboardContext.Provider value={{ user, circles, refreshCircles }}>
@@ -160,35 +167,15 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
           </Link>
 
           <nav aria-label="Coordinator" className="flex-1 space-y-1 px-3 py-4">
-            <Link
-              href="/dashboard"
-              aria-current={pathname === "/dashboard" ? "page" : undefined}
-              className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
-                pathname === "/dashboard"
-                  ? "bg-paper/10 text-gold"
-                  : "text-paper/70 hover:bg-paper/5 hover:text-paper"
-              }`}
-            >
-              My circles
-            </Link>
-            <Link
-              href="/dashboard/settings"
-              aria-current={pathname === "/dashboard/settings" ? "page" : undefined}
-              className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
-                pathname === "/dashboard/settings"
-                  ? "bg-paper/10 text-gold"
-                  : "text-paper/70 hover:bg-paper/5 hover:text-paper"
-              }`}
-            >
-              Settings
-            </Link>
+            {navLink("/dashboard", "My circles", pathname === "/dashboard", false)}
+            {navLink(
+              "/dashboard/settings",
+              "Settings",
+              pathname === "/dashboard/settings",
+              false,
+            )}
             {/* A collector can also save in other people's circles. */}
-            <Link
-              href="/me"
-              className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-paper/70 transition-colors hover:bg-paper/5 hover:text-paper"
-            >
-              My contributions ↗
-            </Link>
+            {navLink("/me", "My contributions ↗", false, false)}
 
             {activeCircleId ? (
               <div className="pt-3">
@@ -217,7 +204,7 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
 
         {/* Main */}
         <div className="flex min-w-0 flex-1 flex-col md:pl-60">
-          <header className="sticky top-0 z-30 border-b border-line bg-paper/80 backdrop-blur-md">
+          <header className="sticky top-0 z-30 border-line bg-paper/80 backdrop-blur-md md:border-b">
             <div className="flex items-center justify-between gap-3 px-4 py-3 sm:px-6">
               <div className="flex min-w-0 items-center gap-2.5 md:hidden">
                 <LogoMark />
@@ -241,41 +228,29 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
                 </button>
               </div>
             </div>
-            {/* Mobile nav */}
-            <nav
-              aria-label="Circle sections"
-              className="flex gap-1 overflow-x-auto border-t border-line px-2 py-1.5 md:hidden"
-            >
-              <Link
-                href="/dashboard"
-                aria-current={pathname === "/dashboard" ? "page" : undefined}
-                className={`whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium ${
-                  pathname === "/dashboard"
-                    ? "bg-green text-paper"
-                    : "text-ink/70 hover:bg-ink/5"
-                }`}
-              >
-                My circles
-              </Link>
-              <Link
-                href="/dashboard/settings"
-                aria-current={pathname === "/dashboard/settings" ? "page" : undefined}
-                className={`whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium ${
-                  pathname === "/dashboard/settings"
-                    ? "bg-green text-paper"
-                    : "text-ink/70 hover:bg-ink/5"
-                }`}
-              >
-                Settings
-              </Link>
-              <Link
-                href="/me"
-                className="whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium text-ink/70 hover:bg-ink/5"
-              >
-                My contributions ↗
-              </Link>
-              {circleNav(true)}
-            </nav>
+            {/* Mobile nav — context-aware, same as the contributor shell:
+                inside a circle we show only that circle's tabs (plus a way
+                back), so collectors aren't juggling account links while working
+                a circle. Outside, the account tabs. */}
+            <MobileTabNav ariaLabel="Sections" activeKey={pathname}>
+              {activeCircleId ? (
+                <>
+                  {navLink("/dashboard", "← My circles", false, true)}
+                  {circleNav(true)}
+                </>
+              ) : (
+                <>
+                  {navLink("/dashboard", "My circles", pathname === "/dashboard", true)}
+                  {navLink(
+                    "/dashboard/settings",
+                    "Settings",
+                    pathname === "/dashboard/settings",
+                    true,
+                  )}
+                  {navLink("/me", "My contributions ↗", false, true)}
+                </>
+              )}
+            </MobileTabNav>
           </header>
           <main className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-8">
             {children}
