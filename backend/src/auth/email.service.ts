@@ -35,8 +35,11 @@ export class EmailService {
     if (!this.transporter) {
       this.transporter = nodemailer.createTransport({
         host: 'smtp.gmail.com',
-        port: 465,
-        secure: true,
+        // Port 587 (STARTTLS) rather than 465 (SMTPS): some hosts (Railway)
+        // filter 465 outbound, and 587 is the standard submission port.
+        port: 587,
+        secure: false,
+        requireTLS: true,
         auth: { user, pass },
         // Railway can't route IPv6 egress (main.ts forces ipv4first DNS order to
         // dodge that) — fail fast here instead of hanging if a connection stalls.
