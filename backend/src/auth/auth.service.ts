@@ -28,6 +28,7 @@ export function toSafeUser(user: User): SafeUser {
     role: user.role,
     status: user.status,
     emailVerifiedAt: user.emailVerifiedAt,
+    hasPassword: Boolean(user.passwordHash),
     phone: user.phone,
     phoneVerifiedAt: user.phoneVerifiedAt,
     altPhone: user.altPhone,
@@ -271,6 +272,23 @@ export class AuthService {
     user.passwordHash = await bcrypt.hash(newPassword, 10);
     await this.users.save(user);
     return { changed: true };
+  }
+
+  /**
+   * Sets a first password for a signed-in account that has none yet (e.g. a
+   * Google-only sign-up). No current password is required — the valid session
+   * already proves ownership. Accounts that already have a password must use
+   * changePassword, which checks the old one.
+   */
+  async setPassword(userId: string, newPassword: string): Promise<SafeUser> {
+    const user = await this.users.findOneByOrFail({ id: userId });
+    if (user.passwordHash) {
+      throw new BadRequestException(
+        'You already have a password — use change password instead',
+      );
+    }
+    user.passwordHash = await bcrypt.hash(newPassword, 10);
+    return toSafeUser(await this.users.save(user));
   }
 
   // ---- Forgot password -----------------------------------------------------

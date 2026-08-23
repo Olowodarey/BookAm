@@ -9,6 +9,9 @@ export interface SafeUser {
   role: Role;
   status: UserStatus;
   emailVerifiedAt: Date | null;
+  /** Whether a password is set — false for Google-only accounts, so the UI can
+   *  offer "set a password" instead of "change password". */
+  hasPassword: boolean;
   /** Optional WhatsApp/phone number, verified in-app to claim circles. */
   phone: string | null;
   phoneVerifiedAt: Date | null;

@@ -22,6 +22,8 @@ export interface SettingsApi {
     currentPassword: string,
     newPassword: string,
   ) => Promise<{ changed: true }>;
+  /** Sets a first password for a Google-only account (no current one needed). */
+  setPassword: (newPassword: string) => Promise<SafeUser>;
   /** Optional in-app WhatsApp/phone verification. */
   sendPhoneOtp: (phone: string) => Promise<OtpSentResponse>;
   verifyPhone: (phone: string, code: string) => Promise<SafeUser>;
@@ -51,7 +53,7 @@ export default function ProfileSettings({
       <div className="grid gap-4">
         <ProfileForm user={user} api={api} onSaved={onSaved} />
         <WhatsAppForm user={user} api={api} onSaved={onSaved} />
-        <PasswordForm api={api} />
+        <PasswordForm user={user} api={api} onSaved={onSaved} />
       </div>
     </div>
   );
@@ -353,25 +355,56 @@ function WhatsAppForm({
   );
 }
 
-function PasswordForm({ api }: { api: SettingsApi }) {
+/**
+ * Change password (accounts that have one) or set a first password (Google-only
+ * accounts, which have none). The set path skips the current-password field —
+ * the signed-in session already proves ownership — and both paths ask for a
+ * confirmation so a typo can't lock anyone out.
+ */
+function PasswordForm({
+  user,
+  api,
+  onSaved,
+}: {
+  user: SafeUser;
+  api: SettingsApi;
+  onSaved: (user: SafeUser) => void;
+}) {
+  const isSet = user.hasPassword;
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
+  const [confirm, setConfirm] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [changed, setChanged] = useState(false);
+  const [done, setDone] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
+    if (next !== confirm) {
+      setError("The new passwords don't match");
+      return;
+    }
     setError(null);
-    setChanged(false);
+    setDone(false);
     setSubmitting(true);
     try {
-      await api.changePassword(current, next);
-      setChanged(true);
+      if (isSet) {
+        await api.changePassword(current, next);
+      } else {
+        onSaved(await api.setPassword(next));
+      }
+      setDone(true);
       setCurrent("");
       setNext("");
+      setConfirm("");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not change password");
+      setError(
+        err instanceof Error
+          ? err.message
+          : isSet
+            ? "Could not change password"
+            : "Could not set password",
+      );
     } finally {
       setSubmitting(false);
     }
@@ -380,29 +413,39 @@ function PasswordForm({ api }: { api: SettingsApi }) {
   return (
     <Card className="px-5 py-5">
       <form onSubmit={(e) => void submit(e)} className="space-y-4">
-        <h2 className="font-display text-lg font-bold">Change password</h2>
+        <h2 className="font-display text-lg font-bold">
+          {isSet ? "Change password" : "Set a password"}
+        </h2>
+        {!isSet ? (
+          <p className="text-sm text-muted">
+            You signed in with Google. Set a password to also log in with your
+            email and password.
+          </p>
+        ) : null}
 
         {error ? <ErrorNote message={error} /> : null}
-        {changed ? (
+        {done ? (
           <p
             role="status"
             className="rounded-xl border border-green/30 bg-green/10 px-3.5 py-2.5 text-sm font-semibold text-green"
           >
-            Password changed ✓
+            {isSet ? "Password changed ✓" : "Password set ✓"}
           </p>
         ) : null}
 
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Current password">
-            <input
-              type="password"
-              required
-              autoComplete="current-password"
-              value={current}
-              onChange={(e) => setCurrent(e.target.value)}
-              className={inputClass}
-            />
-          </Field>
+          {isSet ? (
+            <Field label="Current password">
+              <input
+                type="password"
+                required
+                autoComplete="current-password"
+                value={current}
+                onChange={(e) => setCurrent(e.target.value)}
+                className={inputClass}
+              />
+            </Field>
+          ) : null}
           <Field label="New password (at least 8 characters)">
             <input
               type="password"
@@ -414,11 +457,28 @@ function PasswordForm({ api }: { api: SettingsApi }) {
               className={inputClass}
             />
           </Field>
+          <Field label="Confirm new password">
+            <input
+              type="password"
+              required
+              minLength={8}
+              autoComplete="new-password"
+              value={confirm}
+              onChange={(e) => setConfirm(e.target.value)}
+              className={inputClass}
+            />
+          </Field>
         </div>
 
         <div className="flex justify-end">
           <Button type="submit" disabled={submitting}>
-            {submitting ? "Changing…" : "Change password"}
+            {submitting
+              ? isSet
+                ? "Changing…"
+                : "Setting…"
+              : isSet
+                ? "Change password"
+                : "Set password"}
           </Button>
         </div>
       </form>

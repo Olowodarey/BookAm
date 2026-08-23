@@ -18,6 +18,7 @@ const admin: SafeUser = {
   role: 'ADMIN',
   status: 'ACTIVE',
   emailVerifiedAt: new Date('2026-01-01T00:00:00Z'),
+  hasPassword: true,
   phone: null,
   phoneVerifiedAt: null,
   altPhone: null,

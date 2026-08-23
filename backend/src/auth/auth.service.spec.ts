@@ -87,6 +87,13 @@ describe('AuthService', () => {
       expect(safe).not.toHaveProperty('googleId');
       expect(safe.email).toBe('ada@example.com');
     });
+
+    it('reports whether a password is set', () => {
+      expect(toSafeUser(makeUser({ passwordHash: 'x' })).hasPassword).toBe(true);
+      expect(toSafeUser(makeUser({ passwordHash: null })).hasPassword).toBe(
+        false,
+      );
+    });
   });
 
   describe('login', () => {
@@ -378,6 +385,29 @@ describe('AuthService', () => {
       await expect(
         service.changePassword('user-1', 'wrong', 'newpass1'),
       ).rejects.toBeInstanceOf(UnauthorizedException);
+      expect(users.save).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('setPassword', () => {
+    it('sets a first password when the account has none', async () => {
+      users.findOneByOrFail.mockResolvedValue(makeUser({ passwordHash: null }));
+      users.save.mockImplementation((u: User) => Promise.resolve(u));
+
+      const safe = await service.setPassword('user-1', 'brandnew1');
+
+      expect(safe.hasPassword).toBe(true);
+      const updated = users.save.mock.calls[0][0].passwordHash;
+      expect(await bcrypt.compare('brandnew1', updated)).toBe(true);
+    });
+
+    it('refuses when a password already exists', async () => {
+      users.findOneByOrFail.mockResolvedValue(
+        makeUser({ passwordHash: 'existing-hash' }),
+      );
+      await expect(
+        service.setPassword('user-1', 'brandnew1'),
+      ).rejects.toBeInstanceOf(BadRequestException);
       expect(users.save).not.toHaveBeenCalled();
     });
   });

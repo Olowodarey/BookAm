@@ -13,6 +13,7 @@ import {
   ChangePasswordDto,
   ForgotPasswordDto,
   ResetPasswordDto,
+  SetPasswordDto,
   UpdateProfileDto,
 } from './dto/profile.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
@@ -85,6 +86,16 @@ export class AuthController {
       dto.currentPassword,
       dto.newPassword,
     );
+  }
+
+  /** First password for a signed-in account that has none (e.g. Google sign-up). */
+  @UseGuards(JwtAuthGuard)
+  @Post('set-password')
+  setPassword(
+    @CurrentUser() user: SafeUser,
+    @Body() dto: SetPasswordDto,
+  ): Promise<SafeUser> {
+    return this.authService.setPassword(user.id, dto.newPassword);
   }
 
   // ---- Optional in-app phone/WhatsApp verification -------------------------

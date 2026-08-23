@@ -136,6 +136,13 @@ export const coordinatorApi = {
       method: "POST",
       body: { currentPassword, newPassword },
     }),
+  // First password for a Google-only account (no current password needed —
+  // the session proves ownership). Returns the updated user.
+  setPassword: (newPassword: string) =>
+    request<SafeUser>("/auth/set-password", {
+      method: "POST",
+      body: { newPassword },
+    }),
 
   // Optional in-app WhatsApp/phone verification (claims memberships by number).
   sendPhoneOtp: (phone: string) =>
