@@ -256,7 +256,7 @@ function CircleSettingsCard() {
           <p className="font-mono text-[11px] font-bold uppercase tracking-wide text-green">
             Coordinator settings
           </p>
-          <div className="mt-2 flex items-end gap-2">
+          <div className="mt-2 flex flex-wrap items-end gap-2">
             <Field label="Your fee (% of pot)">
               <input
                 type="number"
@@ -288,7 +288,7 @@ function CircleSettingsCard() {
 
           {detail.cycle ? (
             <div className="mt-4">
-              <div className="flex items-end gap-2">
+              <div className="flex flex-wrap items-end gap-2">
                 <Field label={`Round ${detail.cycle.index} deadline (WAT)`}>
                   <input
                     type="datetime-local"

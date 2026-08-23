@@ -168,9 +168,9 @@ export function Modal({
       onClick={(e) => {
         if (e.target === ref.current) onClose();
       }}
-      className="m-auto w-full max-w-lg rounded-2xl border border-line bg-paper p-0 shadow-2xl backdrop:bg-ink/40 backdrop:backdrop-blur-sm"
+      className="m-auto flex max-h-[calc(100dvh-2rem)] w-[calc(100vw-2rem)] max-w-lg flex-col rounded-2xl border border-line bg-paper p-0 shadow-2xl backdrop:bg-ink/40 backdrop:backdrop-blur-sm"
     >
-      <div className="flex items-center justify-between border-b border-line px-5 py-4">
+      <div className="flex shrink-0 items-center justify-between border-b border-line px-5 py-4">
         <h2 className="font-display text-lg font-bold">{title}</h2>
         <button
           onClick={onClose}
@@ -190,7 +190,7 @@ export function Modal({
           </svg>
         </button>
       </div>
-      <div className="px-5 py-4">{children}</div>
+      <div className="overflow-y-auto px-5 py-4">{children}</div>
     </dialog>
   );
 }
