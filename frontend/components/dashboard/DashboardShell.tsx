@@ -220,7 +220,16 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
 
         {/* Main */}
         <div className="flex min-w-0 flex-1 flex-col md:pl-60">
-          <header className="sticky top-0 z-30 border-line bg-paper/80 backdrop-blur-md md:border-b">
+          {/* On the welcome/account pages there's no tab bar, so the header
+              would blend into the page — give it a visible branded bottom
+              border there. Inside a circle the tab bar already separates it. */}
+          <header
+            className={`sticky top-0 z-30 bg-paper/80 backdrop-blur-md ${
+              activeCircleId
+                ? "border-line md:border-b"
+                : "border-b-2 border-green"
+            }`}
+          >
             <div className="flex items-center justify-between gap-3 px-4 py-3 sm:px-6">
               <div className="flex min-w-0 items-center gap-2.5 md:hidden">
                 <LogoMark />
