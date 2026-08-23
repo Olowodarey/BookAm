@@ -17,6 +17,7 @@ import type { CircleSummary, SafeUser } from "@/lib/dashboard/types";
 import { Spinner } from "@/components/admin/ui";
 import { SupportContactFooter } from "@/components/support/SupportContact";
 import { MobileTabNav } from "@/components/member/MobileTabNav";
+import { MobileMenu } from "@/components/member/MobileMenu";
 
 interface DashboardContextValue {
   user: SafeUser;
@@ -138,6 +139,21 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
     </Link>
   );
 
+  // Vertical rows for the mobile account menu (the header tap target).
+  const menuLink = (href: string, label: string, active: boolean) => (
+    <Link
+      key={href}
+      href={href}
+      role="menuitem"
+      aria-current={active ? "page" : undefined}
+      className={`block rounded-xl px-3 py-2.5 text-sm font-medium ${
+        active ? "bg-green text-paper" : "text-ink/80 hover:bg-ink/5"
+      }`}
+    >
+      {label}
+    </Link>
+  );
+
   const circleNav = (mobile: boolean) =>
     activeCircleId
       ? CIRCLE_NAV.map((item) => {
@@ -220,37 +236,44 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
                 <span className="hidden font-mono text-xs text-muted sm:inline">
                   {user.email}
                 </span>
+                {/* Desktop: the sidebar carries account nav, so a plain
+                    sign-out sits here. */}
                 <button
                   onClick={signOut}
-                  className="rounded-xl border border-green/30 bg-white/70 px-3.5 py-1.5 text-sm font-semibold text-green transition-colors hover:bg-green hover:text-paper"
+                  className="hidden rounded-xl border border-green/30 bg-white/70 px-3.5 py-1.5 text-sm font-semibold text-green transition-colors hover:bg-green hover:text-paper md:inline-flex"
                 >
                   Sign out
                 </button>
-              </div>
-            </div>
-            {/* Mobile nav — context-aware, same as the contributor shell:
-                inside a circle we show only that circle's tabs (plus a way
-                back), so collectors aren't juggling account links while working
-                a circle. Outside, the account tabs. */}
-            <MobileTabNav ariaLabel="Sections" activeKey={pathname}>
-              {activeCircleId ? (
-                <>
-                  {navLink("/dashboard", "← My circles", false, true)}
-                  {circleNav(true)}
-                </>
-              ) : (
-                <>
-                  {navLink("/dashboard", "My circles", pathname === "/dashboard", true)}
-                  {navLink(
+                {/* Mobile: one tap opens all the account-level navigation, so
+                    the tab bar below can stay dedicated to a circle's sections. */}
+                <MobileMenu activeKey={pathname}>
+                  {menuLink("/dashboard", "My circles", pathname === "/dashboard")}
+                  {menuLink(
                     "/dashboard/settings",
                     "Settings",
                     pathname === "/dashboard/settings",
-                    true,
                   )}
-                  {navLink("/me", "My contributions ↗", false, true)}
-                </>
-              )}
-            </MobileTabNav>
+                  {menuLink("/me", "My contributions ↗", false)}
+                  <div className="my-1 border-t border-line" />
+                  <button
+                    onClick={signOut}
+                    role="menuitem"
+                    className="block w-full rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-red-600 hover:bg-red-50"
+                  >
+                    Sign out
+                  </button>
+                </MobileMenu>
+              </div>
+            </div>
+            {/* Mobile circle tabs — shown only once you're inside a circle, so
+                Members / Contributions / Payout are a tap away while you work
+                it. Out on the circles list there's no tab bar; use the menu. */}
+            {activeCircleId ? (
+              <MobileTabNav ariaLabel="Circle sections" activeKey={pathname}>
+                {navLink("/dashboard", "← My circles", false, true)}
+                {circleNav(true)}
+              </MobileTabNav>
+            ) : null}
           </header>
           <main className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-8">
             {children}

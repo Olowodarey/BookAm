@@ -17,6 +17,7 @@ import type { MyCircleCard, SafeUser } from "@/lib/member/types";
 import { Spinner } from "@/components/admin/ui";
 import { SupportContactFooter } from "@/components/support/SupportContact";
 import { MobileTabNav } from "@/components/member/MobileTabNav";
+import { MobileMenu } from "@/components/member/MobileMenu";
 
 interface MemberContextValue {
   user: SafeUser;
@@ -127,6 +128,21 @@ export default function MemberShell({ children }: { children: ReactNode }) {
     </Link>
   );
 
+  // Vertical rows for the mobile account menu (the header tap target).
+  const menuLink = (href: string, label: string, active: boolean) => (
+    <Link
+      key={href}
+      href={href}
+      role="menuitem"
+      aria-current={active ? "page" : undefined}
+      className={`block rounded-xl px-3 py-2.5 text-sm font-medium ${
+        active ? "bg-green text-paper" : "text-ink/80 hover:bg-ink/5"
+      }`}
+    >
+      {label}
+    </Link>
+  );
+
   const circleLinks = (mobile: boolean) =>
     activeCircleId
       ? CIRCLE_NAV.map((item) => {
@@ -198,45 +214,52 @@ export default function MemberShell({ children }: { children: ReactNode }) {
                 Hello,{" "}
                 <span className="font-semibold text-ink">{user.name}</span> 👋
               </div>
+              {/* Desktop: the sidebar already carries account nav, so a plain
+                  sign-out sits here. */}
               <button
                 onClick={signOut}
-                className="rounded-xl border border-green/30 bg-white/70 px-3.5 py-1.5 text-sm font-semibold text-green transition-colors hover:bg-green hover:text-paper"
+                className="hidden rounded-xl border border-green/30 bg-white/70 px-3.5 py-1.5 text-sm font-semibold text-green transition-colors hover:bg-green hover:text-paper md:inline-flex"
               >
                 Sign out
               </button>
+              {/* Mobile: one tap opens all the account-level navigation, so the
+                  tab bar below can stay dedicated to a circle's own sections. */}
+              <MobileMenu activeKey={pathname}>
+                {menuLink("/me", "My circles", pathname === "/me")}
+                {menuLink(
+                  "/me/settings",
+                  "Settings",
+                  pathname === "/me/settings",
+                )}
+                {user.role === "MEMBER"
+                  ? menuLink(
+                      "/me/become-collector",
+                      "Become a collector",
+                      pathname === "/me/become-collector",
+                    )
+                  : null}
+                {user.role === "COORDINATOR"
+                  ? menuLink("/dashboard", "Circles I run ↗", false)
+                  : null}
+                <div className="my-1 border-t border-line" />
+                <button
+                  onClick={signOut}
+                  role="menuitem"
+                  className="block w-full rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-red-600 hover:bg-red-50"
+                >
+                  Sign out
+                </button>
+              </MobileMenu>
             </div>
-            {/* Mobile nav — context-aware: inside a circle we show only that
-                circle's tabs (plus a way back), so contributors aren't always
-                staring at account-level links. Outside, the account tabs. */}
-            <MobileTabNav ariaLabel="Sections" activeKey={pathname}>
-              {activeCircleId ? (
-                <>
-                  {navLink("/me", "← My circles", false, true)}
-                  {circleLinks(true)}
-                </>
-              ) : (
-                <>
-                  {navLink("/me", "My circles", pathname === "/me", true)}
-                  {navLink(
-                    "/me/settings",
-                    "Settings",
-                    pathname === "/me/settings",
-                    true,
-                  )}
-                  {user.role === "MEMBER"
-                    ? navLink(
-                        "/me/become-collector",
-                        "Become a collector",
-                        pathname === "/me/become-collector",
-                        true,
-                      )
-                    : null}
-                  {user.role === "COORDINATOR"
-                    ? navLink("/dashboard", "Circles I run ↗", false, true)
-                    : null}
-                </>
-              )}
-            </MobileTabNav>
+            {/* Mobile circle tabs — shown only once you're inside a circle, so
+                Rounds / Members / Swaps are a tap away while you work it. Out
+                on the circles list there's no tab bar; use the menu above. */}
+            {activeCircleId ? (
+              <MobileTabNav ariaLabel="Circle sections" activeKey={pathname}>
+                {navLink("/me", "← My circles", false, true)}
+                {circleLinks(true)}
+              </MobileTabNav>
+            ) : null}
           </header>
           <main className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-8">
             {children}
