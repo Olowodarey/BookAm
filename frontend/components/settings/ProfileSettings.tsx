@@ -330,7 +330,7 @@ function WhatsAppForm({
                 value={code}
                 onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
                 placeholder="123456"
-                className={`${inputClass} text-center font-mono text-xl tracking-[0.4em]`}
+                className={`${inputClass} text-center font-mono text-base tracking-[0.3em]`}
               />
             </Field>
             <div className="flex items-center justify-between">
