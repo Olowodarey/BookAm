@@ -1,5 +1,5 @@
 import AjoCard from "./AjoCard";
-import WaitlistForm from "./WaitlistForm";
+import GetStartedCtas from "./GetStartedCtas";
 
 export default function Hero() {
   return (
@@ -39,9 +39,7 @@ export default function Hero() {
           torchlight.
         </p>
 
-        <div className="mt-8">
-          <WaitlistForm source="hero" />
-        </div>
+        <GetStartedCtas className="mt-8" />
 
         <p className="mt-4 text-sm text-muted">
           Free to start · No bank details · Money moves between members, never

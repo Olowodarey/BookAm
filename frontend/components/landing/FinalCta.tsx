@@ -1,20 +1,18 @@
 import Link from "next/link";
-import WaitlistForm from "./WaitlistForm";
+import GetStartedCtas from "./GetStartedCtas";
 
 export default function FinalCta() {
   return (
-    <section id="early-access" className="scroll-mt-20">
+    <section id="get-started" className="scroll-mt-20">
       <div className="mx-auto flex max-w-3xl flex-col items-center px-4 py-20 text-center sm:px-6 lg:py-24">
         <h2 className="font-display text-3xl font-bold tracking-tight sm:text-4xl">
-          Be the first coordinator on BookAm.
+          Start your first circle today.
         </h2>
         <p className="mt-4 max-w-lg text-lg leading-relaxed text-ink/75">
-          Drop your email and we&apos;ll reach out when early access opens for
-          your area.
+          Create your free account and turn your paper collection card into one
+          screen — in minutes.
         </p>
-        <div className="mt-8 flex w-full justify-center">
-          <WaitlistForm source="final-cta" />
-        </div>
+        <GetStartedCtas className="mt-8 justify-center" />
         <p className="mt-6 text-sm text-ink/70">
           Already run an ajo?{" "}
           <Link

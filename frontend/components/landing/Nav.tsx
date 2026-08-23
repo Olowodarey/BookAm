@@ -76,10 +76,10 @@ export default function Nav() {
             Sign in
           </Link>
           <Link
-            href="/#early-access"
+            href="/register"
             className="hidden rounded-xl bg-green px-4 py-2 text-sm font-semibold text-paper transition-colors hover:bg-green-deep sm:inline-block"
           >
-            Get early access
+            Get started
           </Link>
 
           {/* Mobile menu toggle — the nav links are hidden below md, so phones
@@ -149,11 +149,11 @@ export default function Nav() {
                 Sign in
               </Link>
               <Link
-                href="/#early-access"
+                href="/register"
                 onClick={() => setOpen(false)}
                 className="rounded-xl bg-green px-4 py-2.5 text-center text-sm font-semibold text-paper transition-colors hover:bg-green-deep"
               >
-                Get early access
+                Get started
               </Link>
             </div>
           </div>
