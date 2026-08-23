@@ -34,8 +34,14 @@ export class EmailService {
     if (!user || !pass) return null;
     if (!this.transporter) {
       this.transporter = nodemailer.createTransport({
-        service: 'gmail',
+        host: 'smtp.gmail.com',
+        port: 465,
+        secure: true,
         auth: { user, pass },
+        // Railway can't route IPv6 egress (main.ts forces ipv4first DNS order to
+        // dodge that) — fail fast here instead of hanging if a connection stalls.
+        connectionTimeout: 10_000,
+        greetingTimeout: 10_000,
       });
     }
     return this.transporter;

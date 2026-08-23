@@ -1,9 +1,17 @@
+import { setDefaultResultOrder } from 'node:dns';
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import type { Request, Response, NextFunction } from 'express';
 import { join } from 'path';
 import { AppModule } from './app.module';
+
+// Railway's containers can't route IPv6 egress, but Node 18+ resolves DNS
+// "verbatim" (IPv6 first). That makes outbound connections — notably Gmail
+// SMTP (smtp.gmail.com:465) — hit an unreachable IPv6 address and time out
+// (ENETUNREACH → ETIMEDOUT), which was silently breaking password-reset and
+// verification emails in production. Prefer IPv4 so those connect.
+setDefaultResultOrder('ipv4first');
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
