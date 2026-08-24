@@ -57,7 +57,7 @@ export default function GoogleButton({
       window.google.accounts.id.renderButton(slot.current, {
         theme: "outline",
         size: "large",
-        width: 320,
+        width: 360,
         text: "continue_with",
         shape: "pill",
       });
@@ -92,7 +92,14 @@ export default function GoogleButton({
         </span>
         <span className="h-px flex-1 bg-line" />
       </div>
-      <div ref={slot} className="flex justify-center" />
+      {/* Thick, pill-shaped wrapper so the Google button reads as clearly
+          clickable — the GSI-rendered button itself can't be restyled. */}
+      <div className="group flex justify-center">
+        <div
+          ref={slot}
+          className="flex cursor-pointer justify-center rounded-full border-2 border-line bg-white p-1.5 shadow-sm transition-all duration-150 hover:border-green hover:shadow-md active:scale-[0.98]"
+        />
+      </div>
     </div>
   );
 }
