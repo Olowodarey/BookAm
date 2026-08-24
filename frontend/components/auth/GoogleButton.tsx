@@ -58,9 +58,22 @@ export default function GoogleButton({
     if (!GOOGLE_CLIENT_ID || !wrap.current) return;
     let initialized = false;
     let frame = 0;
+    // Width the button was last drawn at. Mobile browsers fire resize
+    // constantly (address bar show/hide on scroll); re-rendering the GSI button
+    // each time visibly blinks it, so we only redraw when the width truly moves.
+    let lastWidth = 0;
 
     const render = () => {
       if (!window.google || !slot.current || !wrap.current) return;
+      const available = wrap.current.clientWidth - PILL_CHROME;
+      const width = Math.round(
+        Math.min(GSI_MAX_WIDTH, Math.max(GSI_MIN_WIDTH, available)),
+      );
+      // Nothing meaningful changed — leave the existing button untouched.
+      // (Ignore sub-2px jitter so mobile viewport wobble can't cause a redraw.)
+      if (initialized && Math.abs(width - lastWidth) < 2) return;
+      lastWidth = width;
+
       if (!initialized) {
         window.google.accounts.id.initialize({
           client_id: GOOGLE_CLIENT_ID,
@@ -68,10 +81,6 @@ export default function GoogleButton({
         });
         initialized = true;
       }
-      const available = wrap.current.clientWidth - PILL_CHROME;
-      const width = Math.round(
-        Math.min(GSI_MAX_WIDTH, Math.max(GSI_MIN_WIDTH, available)),
-      );
       // Clear any button from a previous (differently sized) render.
       slot.current.replaceChildren();
       window.google.accounts.id.renderButton(slot.current, {
